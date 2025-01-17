@@ -282,7 +282,7 @@ const ifPress = n =>{
 
 
 let title = s => codes.push("");
-title = s => codes.push("\n["+ s +"]");
+//title = s => codes.push("\n["+ s +"]");
 
 
 title("Restore Items");
@@ -366,11 +366,14 @@ data.checkPoint.set(1);
 		//ヘルマスでなければ能力面のロード
 		ram.gamemode.ne(ram.gamemode.helperToHero);
 		{
-			data.kirbyConditionSav.copy(ram.kirbyCondition);
-			data.helperConditionSav.copy(ram.helperCondition);
+			data.kirbyConditionSav.at(0, 4).copy(ram.kirbyCondition.at(0, 4));
+			data.helperConditionSav.at(0, 4).copy(ram.helperCondition.at(0, 4));
 			data.invincibleCandyTimerSav.copy(ram.invincibleCandyTimer);
 
-			//ウィリーに乗る処理
+			//ウィリーに乗るかの処理
+			data.kirbyConditionSav.at(5, 1).copy(ram.kirbyCondition.at(5, 1));
+			data.helperConditionSav.at(5, 1).copy(ram.helperCondition.at(5, 1));
+
 			data.helperConditionSav.at(4, 2).eq(0x0201);
 			{
 				ram.wheelieRodeBy2.set(2);
