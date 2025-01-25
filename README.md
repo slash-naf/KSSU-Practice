@@ -5,7 +5,7 @@ NDSForwarderを使っている場合、 "usrcheat.dat"を"sd:/_nds/ntr-forwarder
 Xを押すと、チートが表示され、Aで選択、Xで保存して戻る  
 STARTで保存して開始  
 TWiLight Menu++の場合は"sd:/_nds/TWiLightMenu/extras/usrcheat.dat"に配置  
-ちなみにFTBDを使えば無線でファイルのやりとりができる
+ちなみにFTPDを使えば無線でファイルのやりとりができる
 
 "Prepare for Next Routine"以外のチートは必要なければ無効にして大丈夫  
 0x023FE000から0x023FE040までの65バイトのメモリを勝手に使ってるから他のチートと併用したいときは注意
