@@ -108,6 +108,8 @@ int sav_pos;
 int tmp_playerMode;
 int sav_playerMode;
 
+char prev_gameState;
+
 int f(int pressed){
 	//フロアに入ったときの座標などを記憶しておく
 	if(*getPos == 0){
@@ -117,9 +119,11 @@ int f(int pressed){
 		tmp_playerMode = *playerMode;
 	}
 
-	if(L & pressed){
-		switch(*gameState){
-		case STATE_PAUSE:	//ポーズ時にLでQS
+	//場面別の処理
+	switch(*gameState){
+	case STATE_PAUSE:
+		//ポーズ時にLでQS
+		if(L & pressed){
 			//フロアと座標と状態
 			sav_gameStates = *gameStates ^ (STATE_PAUSE ^ STATE_FLOOR_LOAD);
 			sav_pos = tmp_pos;
@@ -135,53 +139,61 @@ int f(int pressed){
 			//銀河
 			sav_mww_abilities = *mww_abilities;
 			sav_mww_selectedAbility = *mww_selectedAbility;
+		}
+		break;
+	case STATE_PLAY:
+		//通常時にLを押したとき同じゲームモードでセーブ済みならQL
+		if((L & pressed) && ((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) == (sav_gameStates & 0xFFFF)){
+			//HPと残機を最大に
+			*playerHP = *playerMaxHP;
+			*helperHP = *helperMaxHP;
+			*lives = 99;
 
-			break;
-		case STATE_PLAY:	//通常時にLでQL
-			if(((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) == (sav_gameStates & 0xFFFF)){	//同じモードでセーブ済みなら
-				//HPと残機を最大に
-				*playerHP = *playerMaxHP;
-				*helperHP = *helperMaxHP;
-				*lives = 99;
+			//フロアと座標と状態
+			*gameStates = sav_gameStates;
+			*setPos = sav_pos;
+			*playerMode = sav_playerMode;
 
-				//フロアと座標と状態
-				*gameStates = sav_gameStates;
-				*setPos = sav_pos;
-				*playerMode = sav_playerMode;
+			//能力
+			*playerStates = sav_playerStates;
+			*playerRiding = sav_playerRiding;
+			*helperStates = sav_helperStates;
+			*helperRode   = sav_helperRode;
 
-				//能力
-				*playerStates = sav_playerStates;
-				*playerRiding = sav_playerRiding;
-				*helperStates = sav_helperStates;
-				*helperRode   = sav_helperRode;
-
-				//モード別の処理
-				switch((sav_gameStates >> 8) & 0xFF){
-				case GCO:
-					//洞窟のお宝とボスをリセット
-					gco_treasures[0] = 0;
-					gco_treasures[1] = 0;
-					*gco_treasuresCnt = 0;
-					*gco_bosses = 0;
-					break;
-				case MWW:
-					//銀河の開放済み能力とその選択位置をQL
-					*mww_abilities = sav_mww_abilities;
-					*mww_selectedAbility = sav_mww_selectedAbility;
-					*mww_changingSelectedAbility = 1;
-					break;
-				case THE_ARENA:
-				case THE_TRUE_ARENA:
-				case HELPER_TO_HERO:
-					break;
-				case MKU:
-					//メタナイトでゴーのPtを最大に
-					*mkuPt = 50;
-					break;
-				}
+			//ゲームモード別の処理
+			switch((sav_gameStates >> 8) & 0xFF){
+			case GCO:
+				//洞窟のお宝とボスをリセット
+				gco_treasures[0] = 0;
+				gco_treasures[1] = 0;
+				*gco_treasuresCnt = 0;
+				*gco_bosses = 0;
+				break;
+			case MWW:
+				//銀河の開放済み能力とその選択位置をQL
+				*mww_abilities = sav_mww_abilities;
+				*mww_selectedAbility = sav_mww_selectedAbility;
+				*mww_changingSelectedAbility = 1;
+				break;
+			case THE_ARENA:
+			case THE_TRUE_ARENA:
+			case HELPER_TO_HERO:
+				break;
+			case MKU:
+				//メタナイトでゴーのPtを最大に
+				*mkuPt = 50;
+				break;
 			}
-			break;
+		}
+		break;
+	default:
+		//フロアロード開始時に
+		if(prev_gameState == STATE_PLAY){
+
 		}
 	}
+
+	prev_gameState = *gameState;
+
 	return pressed;
 }
