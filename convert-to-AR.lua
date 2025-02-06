@@ -1,4 +1,5 @@
-ar = ""
+copyAddr = 0x023FE000	--プログラムのコピー先
+ar = ""	--ARコードを入れる
 
 --バイナリファイルのデータから4byte読み込み
 function binDword(s, i)
@@ -27,25 +28,42 @@ function OToAR(path)	--オブジェクトファイルを読み込んで処理を
 	
 	if file ~= nil then
 		-- 全読込み
-		data = file:read("*all")
+		local data = file:read("*all")
 		file:close()
 
 		--プログラムの部分を読込み
 		local i = 0x34
 		local n = binDword(data, i)
-		while n ~= 0 do
-			add(n)
+		local varPtrAddr
+		while true do
 			i = i + 4
-			n = binDword(data, i)
+			local nextVal = binDword(data, i)
+
+			if n == 0 then
+				if nextVal == 1 then
+					--グローバル変数のアドレスを設定
+					if varPtrAddr == nil then
+						add(copyAddr + 4)
+					else
+						set(varPtrAddr, copyAddr)
+					end
+					break
+				else
+					varPtrAddr = copyAddr
+					copyAddr = copyAddr + 4
+				end
+			else
+				add(n)
+			end
+
+			n = nextVal
 		end
-		add(copyAddr + 4)	--グローバル変数のアドレス
 	else
 		ar = ar.."ファイル無い\r\n"
 	end
 end
 
 
-copyAddr = 0x023FE000	--プログラムのコピー先
 
 --ボタン入力処理に割り込ませる
 set(0x020017C0, 0xE92D5FFE)	--cmp r4,#0x0	->	stmdb  r13!,{r1-r12, lr}	;レジスタの退避
