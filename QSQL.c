@@ -84,10 +84,11 @@ int* const displayMode = (int*)0x0209ECC4;	//スコア・ゴールドの所に�
 
 int* const  playerStates = (int*)0x020BA318;	//1Pの能力
 char* const playerRiding =(char*)0x020BA31D;	//ウィリーライダーなら2
-short* const invincibleCandyTimer = (short*)0x020BA5CC;	//むてきキャンディの残り時間
+short* const playerInvincibility = (short*)0x020BA5CC;	//1Pのむてきキャンディ/1Pと2pのメタクイックの残り時間
 
 int* const  helperStates = (int*)0x020BAB34;	//2Pの能力
 char* const helperRode   =(char*)0x020BAB39;	//ウィリーライダーなら2
+short* const helperInvincibility = (short*)0x020BADE8;	//2Pのむてきキャンディの残り時間。メタクイックは1Pのが参照され、こっちは使われない
 
 char* const menuPageIdx =(char*)0x021983CA;	//ポーズのメニューのページ番号
 
@@ -107,6 +108,11 @@ int sav_pos;
 
 int tmp_playerMode;
 int sav_playerMode;
+
+short tmp_playerInvincibility;
+short sav_playerInvincibility;
+short tmp_helperInvincibility;
+short sav_helperInvincibility;
 
 char prev_gameState;
 
@@ -132,9 +138,12 @@ int f(int pressed){
 			//能力
 			sav_playerStates = *playerStates;
 			sav_playerRiding = *playerRiding;
+			sav_playerInvincibility = tmp_playerInvincibility;
+
 			sav_helperStates = *helperStates;
 			if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
 			sav_helperRode   = *helperRode;
+			sav_helperInvincibility = tmp_helperInvincibility;
 
 			//銀河
 			sav_mww_abilities = *mww_abilities;
@@ -157,8 +166,11 @@ int f(int pressed){
 			//能力
 			*playerStates = sav_playerStates;
 			*playerRiding = sav_playerRiding;
+			*playerInvincibility = sav_playerInvincibility;
+
 			*helperStates = sav_helperStates;
 			*helperRode   = sav_helperRode;
+			*helperInvincibility = sav_helperInvincibility;
 
 			//ゲームモード別の処理
 			switch((sav_gameStates >> 8) & 0xFF){
@@ -187,13 +199,15 @@ int f(int pressed){
 		}
 		break;
 	default:
-		//フロアロード開始時に
+		//フロアのロードとかの開始時に
 		if(prev_gameState == STATE_PLAY){
-
+			//むてきキャンディの時間を記憶しておく
+			tmp_playerInvincibility = *playerInvincibility;
+			tmp_helperInvincibility = *helperInvincibility;
 		}
 	}
 
-	prev_gameState = *gameState;
+	prev_gameState = *gameState;	//前の gameState を記憶しておく
 
 	return pressed;
 }
