@@ -70,6 +70,7 @@ char* const gco_treasuresCnt =(char*)0x0206E112;	//お宝所持数
 char* const arena_cnt = (char*)0x0206FC62;	//格闘王系で何戦目か
 
 int* const  mww_abilities               =  (int*)0x02070A40;	//銀河の開放済み能力
+char* const mww_abilitiesByStage        = (char*)0x02070A47;	//ステージごとの開放済み能力の数を記憶した長さ8の配列
 char* const mww_selectedAbility         = (char*)0x02070A5C;	//銀河の選択能力
 char* const mww_changingSelectedAbility = (char*)0x02070A5E;	//選択能力が遷移中なら1
 
@@ -158,11 +159,6 @@ int f(int pressed){
 			*helperHP = *helperMaxHP;
 			*lives = 99;
 
-			//フロアと座標と状態
-			*gameStates = sav_gameStates;
-			*setPos = sav_pos;
-			*playerMode = sav_playerMode;
-
 			//能力
 			*playerStates = sav_playerStates;
 			*playerRiding = sav_playerRiding;
@@ -174,6 +170,10 @@ int f(int pressed){
 
 			//ゲームモード別の処理
 			switch((sav_gameStates >> 8) & 0xFF){
+		//	case THE_ARENA:
+		//	case THE_TRUE_ARENA:
+		//	case HELPER_TO_HERO:
+		//		break;
 			case GCO:
 				//洞窟のお宝とボスをリセット
 				gco_treasures[0] = 0;
@@ -186,16 +186,21 @@ int f(int pressed){
 				*mww_abilities = sav_mww_abilities;
 				*mww_selectedAbility = sav_mww_selectedAbility;
 				*mww_changingSelectedAbility = 1;
-				break;
-			case THE_ARENA:
-			case THE_TRUE_ARENA:
-			case HELPER_TO_HERO:
+				//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
+				for(int i=0; i < 8; i++){
+					mww_abilitiesByStage[i] = 0;
+				}
 				break;
 			case MKU:
 				//メタナイトでゴーのPtを最大に
 				*mkuPt = 50;
 				break;
 			}
+
+			//フロアと座標と状態
+			*gameStates = sav_gameStates;
+			*setPos = sav_pos;
+			*playerMode = sav_playerMode;
 		}
 		break;
 	default:
