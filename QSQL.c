@@ -96,6 +96,7 @@ char* const menuPageIdx =(char*)0x021983CA;	//ポーズのメニューのペー�
 
 short* const buttons = (short*)0x04000130;	//押したボタンに対応するビットが0になる
 
+int tmp_timer;
 
 int sav_gameStates;
 
@@ -131,6 +132,8 @@ int f(int pressed){
 		tmp_playerMode = *playerMode;
 	}
 
+	if(*timer < 0){*timer = 0;}
+
 	//場面別の処理
 	switch(*gameState){
 	case STATE_PAUSE:
@@ -165,6 +168,9 @@ int f(int pressed){
 	case STATE_PLAY:
 		//通常時にLを押したとき同じゲームモードでセーブ済みならQL
 		if((L & pressed) && ((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) == (sav_gameStates & 0xFFFF)){
+			//タイマーリセット
+			*timer = -1;	//タイマーが動いてるとこのあと1進むのを考慮して-1にする
+
 			//HPと残機を最大に
 			*playerHP = *playerMaxHP;
 			*helperHP = *helperMaxHP;
@@ -183,6 +189,7 @@ int f(int pressed){
 				*helperRode   = sav_helperRode;
 				*helperInvincibility = sav_helperInvincibility;
 			}
+
 			switch(mode){
 			case THE_ARENA:
 			case THE_TRUE_ARENA:
@@ -230,11 +237,23 @@ int f(int pressed){
 		}
 		break;
 	default:
+		tmp_timer = *timer;	//表示タイムの更新
+
 		//フロアのロードとかの開始時に
 		if(prev_gameState == STATE_PLAY){
-			//むてきキャンディの時間を記憶しておく
+			//むてきキャンディの時間とかを記憶しておく
 			tmp_playerInvincibility = *playerInvincibility;
 			tmp_helperInvincibility = *helperInvincibility;
+		}
+	}
+
+	//タイムをスコア・ゴールドに表示
+	if(*gameMode < 7){
+		*displayMode = 0;
+		if(*gameMode == GCO){
+			*gco_gold = tmp_timer;
+		}else{
+			*score = tmp_timer;
 		}
 	}
 
