@@ -67,7 +67,8 @@ int* const  gco_gold         = (int*)0x0206E108;	//洞窟のゴールド
 char* const gco_bosses       =(char*)0x0206E10E;	//ボスを倒したか
 char* const gco_treasuresCnt =(char*)0x0206E112;	//お宝所持数
 
-char* const arena_cnt = (char*)0x0206FC62;	//格闘王系で何戦目か
+char* const arena_idx = (char*)0x0206FC62;	//格闘王系で何戦目か
+char* const arena_bosses = (char*)0x0206FC66;	//格闘王系でのボスの並びが記憶されている配列
 
 int* const  mww_abilities               =  (int*)0x02070A40;	//銀河の開放済み能力
 char* const mww_abilitiesByStage        = (char*)0x02070A47;	//ステージごとの開放済み能力の数を記憶した長さ8の配列
@@ -93,6 +94,8 @@ short* const helperInvincibility = (short*)0x020BADE8;	//2Pのむてきキャン
 
 char* const menuPageIdx =(char*)0x021983CA;	//ポーズのメニューのページ番号
 
+short* const buttons = (short*)0x04000130;	//押したボタンに対応するビットが0になる
+
 
 int sav_gameStates;
 
@@ -114,6 +117,8 @@ short tmp_playerInvincibility;
 short sav_playerInvincibility;
 short tmp_helperInvincibility;
 short sav_helperInvincibility;
+
+char sav_arena_boss;
 
 char prev_gameState;
 
@@ -149,6 +154,9 @@ int f(int pressed){
 			//銀河
 			sav_mww_abilities = *mww_abilities;
 			sav_mww_selectedAbility = *mww_selectedAbility;
+
+			//格闘王系
+			sav_arena_boss = arena_bosses[*arena_idx];
 		}
 		break;
 	case STATE_PLAY:
@@ -159,48 +167,63 @@ int f(int pressed){
 			*helperHP = *helperMaxHP;
 			*lives = 99;
 
-			//能力
-			*playerStates = sav_playerStates;
-			*playerRiding = sav_playerRiding;
-			*playerInvincibility = sav_playerInvincibility;
-
-			*helperStates = sav_helperStates;
-			*helperRode   = sav_helperRode;
-			*helperInvincibility = sav_helperInvincibility;
-
 			//ゲームモード別の処理
-			switch((sav_gameStates >> 8) & 0xFF){
-		//	case THE_ARENA:
-		//	case THE_TRUE_ARENA:
-		//	case HELPER_TO_HERO:
-		//		break;
-			case GCO:
-				//洞窟のお宝とボスをリセット
-				gco_treasures[0] = 0;
-				gco_treasures[1] = 0;
-				*gco_treasuresCnt = 0;
-				*gco_bosses = 0;
-				break;
-			case MWW:
-				//銀河の開放済み能力とその選択位置をQL
-				*mww_abilities = sav_mww_abilities;
-				*mww_selectedAbility = sav_mww_selectedAbility;
-				*mww_changingSelectedAbility = 1;
-				//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
-				for(int i=0; i < 8; i++){
-					mww_abilitiesByStage[i] = 0;
+			int mode = (sav_gameStates >> 8) & 0xFF;
+
+			//能力
+			if(mode != HELPER_TO_HERO){
+				*playerStates = sav_playerStates;
+				*playerRiding = sav_playerRiding;
+				*playerInvincibility = sav_playerInvincibility;
+
+				*helperStates = sav_helperStates;
+				*helperRode   = sav_helperRode;
+				*helperInvincibility = sav_helperInvincibility;
+			}
+			switch(mode){
+			case THE_ARENA:
+			case THE_TRUE_ARENA:
+			case HELPER_TO_HERO:
+				//格闘王系のモードでのボスのロード
+				//R押しながらLで次のボスへ
+				if(R & *buttons){
+					*arena_idx = 0;
+					arena_bosses[0] = sav_arena_boss;
+					*gameState = STATE_ARENA_MATCH;
+				}else{
+					*gameState = STATE_ARENA_PROCEED;
 				}
 				break;
-			case MKU:
-				//メタナイトでゴーのPtを最大に
-				*mkuPt = 50;
-				break;
-			}
+			default:
+				//フロアと座標と状態
+				*gameStates = sav_gameStates;
+				*setPos = sav_pos;
+				*playerMode = sav_playerMode;
 
-			//フロアと座標と状態
-			*gameStates = sav_gameStates;
-			*setPos = sav_pos;
-			*playerMode = sav_playerMode;
+				switch(mode){
+				case GCO:
+					//洞窟のお宝とボスをリセット
+					gco_treasures[0] = 0;
+					gco_treasures[1] = 0;
+					*gco_treasuresCnt = 0;
+					*gco_bosses = 0;
+					break;
+				case MWW:
+					//銀河の開放済み能力とその選択位置をQL
+					*mww_abilities = sav_mww_abilities;
+					*mww_selectedAbility = sav_mww_selectedAbility;
+					*mww_changingSelectedAbility = 1;
+					//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
+					for(int i=0; i < 8; i++){
+						mww_abilitiesByStage[i] = 0;
+					}
+					break;
+				case MKU:
+					//メタナイトでゴーのPtを最大に
+					*mkuPt = 50;
+					break;
+				}
+			}
 		}
 		break;
 	default:
