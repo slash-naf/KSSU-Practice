@@ -134,29 +134,32 @@ int f(int pressed){
 	//場面別の処理
 	switch(*gameState){
 	case STATE_PAUSE:
-		//ポーズ時にLでQS
-		if(L & pressed){
+		//ポーズ時にL/RでQS
+		if((L | R) & pressed){
 			//フロアと座標と状態
 			sav_gameStates = *gameStates ^ (STATE_PAUSE ^ STATE_FLOOR_LOAD);
 			sav_pos = tmp_pos;
 			sav_playerMode = tmp_playerMode;
 
-			//能力
-			sav_playerStates = *playerStates;
-			sav_playerRiding = *playerRiding;
-			sav_playerInvincibility = tmp_playerInvincibility;
-
-			sav_helperStates = *helperStates;
-			if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
-			sav_helperRode   = *helperRode;
-			sav_helperInvincibility = tmp_helperInvincibility;
-
 			//銀河
 			sav_mww_abilities = *mww_abilities;
 			sav_mww_selectedAbility = *mww_selectedAbility;
 
-			//格闘王系
+			//格闘王系でのボス
 			sav_arena_boss = arena_bosses[*arena_idx];
+
+			//Lなら能力面のQSもする。Rならしない
+			if(L & pressed){
+				//能力
+				sav_playerStates = *playerStates;
+				sav_playerRiding = *playerRiding;
+				sav_playerInvincibility = tmp_playerInvincibility;
+
+				sav_helperStates = *helperStates;
+				if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
+				sav_helperRode   = *helperRode;
+				sav_helperInvincibility = tmp_helperInvincibility;
+			}
 		}
 		break;
 	case STATE_PLAY:
