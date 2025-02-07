@@ -40,10 +40,14 @@ enum GameMode{
 	THE_TRUE_ARENA= 0xA,
 	BEGINNERS_ROOM= 0xB,
 };
-
+enum Music{
+	Music_MUTE = 0xFFFFFC19,
+};
 
 int* const seed  = (int*)0x02041D3C;	//乱数
 int* const timer = (int*)0x02041D60;	//タイマー
+
+int* const music = (int*)0x020485C4;	//曲。0xFFFFFC19がミュートだけどフロア遷移時に入れても曲が最初からになるだけ
 
 int*  const gameStates=  (int*)0x0205B244;
 char* const gameState = (char*)0x0205B244;
@@ -123,6 +127,13 @@ char sav_arena_boss;
 
 char prev_gameState;
 
+char config_music;
+enum Config_Music{
+	Config_Music_NONE = 0,
+	Config_Music_RESET = 1,
+	//Config_Music_MUTE = 2,
+};
+
 int f(int pressed){
 	//フロアに入ったときの座標などを記憶しておく
 	if(*getPos == 0){
@@ -164,6 +175,10 @@ int f(int pressed){
 				sav_helperInvincibility = tmp_helperInvincibility;
 			}
 		}
+		//ポーズ中に上入力で曲の設定
+		if(UP & pressed){
+			config_music = *menuPageIdx;
+		}
 		break;
 	case STATE_PLAY:
 		//通常時にLを押したとき同じゲームモードでセーブ済みならQL
@@ -175,6 +190,13 @@ int f(int pressed){
 			*playerHP = *playerMaxHP;
 			*helperHP = *helperMaxHP;
 			*lives = 99;
+
+			//曲の設定
+			switch(config_music){
+			case Config_Music_RESET:
+				*music = Music_MUTE;
+				break;
+			}
 
 			//ゲームモード別の処理
 			int mode = (sav_gameStates >> 8) & 0xFF;
