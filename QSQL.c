@@ -127,12 +127,7 @@ char sav_arena_boss;
 
 char prev_gameState;
 
-char config_music;
-enum Config_Music{
-	Config_Music_NONE = 0,
-	Config_Music_RESET = 1,
-	//Config_Music_MUTE = 2,
-};
+short conf_musicReset;
 
 int f(int pressed){
 	//フロアに入ったときの座標などを記憶しておく
@@ -162,22 +157,18 @@ int f(int pressed){
 			//格闘王系でのボス
 			sav_arena_boss = arena_bosses[*arena_idx];
 
-			//Lなら能力面のQSもする。Rならしない
-			if(L & pressed){
-				//能力
-				sav_playerStates = *playerStates;
-				sav_playerRiding = *playerRiding;
-				sav_playerInvincibility = tmp_playerInvincibility;
+			//能力
+			sav_playerStates = *playerStates;
+			sav_playerRiding = *playerRiding;
+			sav_playerInvincibility = tmp_playerInvincibility;
 
-				sav_helperStates = *helperStates;
-				if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
-				sav_helperRode   = *helperRode;
-				sav_helperInvincibility = tmp_helperInvincibility;
-			}
-		}
-		//ポーズ中に上入力で曲の設定
-		if(UP & pressed){
-			config_music = *menuPageIdx;
+			sav_helperStates = *helperStates;
+			if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
+			sav_helperRode   = *helperRode;
+			sav_helperInvincibility = tmp_helperInvincibility;
+
+			//曲の設定。Lなら通常、Rなら曲リセット
+			conf_musicReset = R & pressed;
 		}
 		break;
 	case STATE_PLAY:
@@ -191,11 +182,9 @@ int f(int pressed){
 			*helperHP = *helperMaxHP;
 			*lives = 99;
 
-			//曲の設定
-			switch(config_music){
-			case Config_Music_RESET:
+			//曲のリセット
+			if(conf_musicReset){
 				*music = Music_MUTE;
-				break;
 			}
 
 			//ゲームモード別の処理
