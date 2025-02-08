@@ -140,48 +140,51 @@ int f(int pressed){
 
 	if(*timer < 0){*timer = 0;}
 
+
+	int qs = 0;
 	//場面別の処理
 	switch(*gameState){
 	case STATE_PAUSE:
-	case STATE_PLAY:
-		//通常時にLでQL
 		//ポーズ時にL/RでQS
-		//通常時に同じゲームモードでセーブ済みでなければ先にQSQL
-		if((L & pressed) || (*gameState == STATE_PAUSE && (R & pressed))){
-			//QS
-			if( *gameState == STATE_PAUSE || ((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) != (sav_gameStates & 0xFFFF) ){
-				//フロアと座標と状態
-				sav_gameStates = (*gameStates & 0xFFFFFF00) | STATE_FLOOR_LOAD;
-				sav_pos = tmp_pos;
-				sav_playerMode = tmp_playerMode;
+		qs = (L | R) & pressed;
+	case STATE_PLAY:
+		//通常時にLでQL、同じゲームモードで未QSならQSもする
+		qs = qs || ( (L & pressed) && ((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) != (sav_gameStates & 0xFFFF) );
 
-				//銀河
-				sav_mww_abilities = *mww_abilities;
-				sav_mww_selectedAbility = *mww_selectedAbility;
+		//QS
+		if(qs){
+			//フロアと座標と状態
+			sav_gameStates = (*gameStates & 0xFFFFFF00) | STATE_FLOOR_LOAD;
+			sav_pos = tmp_pos;
+			sav_playerMode = tmp_playerMode;
 
-				//格闘王系でのボス
-				sav_arena_boss = arena_bosses[*arena_idx];
+			//銀河
+			sav_mww_abilities = *mww_abilities;
+			sav_mww_selectedAbility = *mww_selectedAbility;
 
-				//能力
-				sav_playerStates = *playerStates;
-				sav_playerRiding = *playerRiding;
-				sav_playerInvincibility = tmp_playerInvincibility;
+			//格闘王系でのボス
+			sav_arena_boss = arena_bosses[*arena_idx];
 
-				sav_helperStates = *helperStates;
-				if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
-				sav_helperRode   = *helperRode;
-				sav_helperInvincibility = tmp_helperInvincibility;
+			//能力
+			sav_playerStates = *playerStates;
+			sav_playerRiding = *playerRiding;
+			sav_playerInvincibility = tmp_playerInvincibility;
 
-				//ポーズ時はQSのみでQLはしない
-				if(*gameState == STATE_PAUSE){
-					//曲の設定。Lなら通常、Rなら曲リセット
-					conf_musicReset = R & pressed;
-					break;
-				}
+			sav_helperStates = *helperStates;
+			if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
+			sav_helperRode   = *helperRode;
+			sav_helperInvincibility = tmp_helperInvincibility;
+
+			//ポーズ時はQSのみでQLはしない
+			if(*gameState == STATE_PAUSE){
+				//曲の設定。Lなら通常、Rなら曲リセット
+				conf_musicReset = R & pressed;
+				break;
 			}
+		}
 
-			//QL
-
+		//QL
+		if(L & pressed){
 			//タイマーリセット
 			*timer = -1;	//タイマーが動いてるとこのあと1進むのを考慮して-1にする
 
