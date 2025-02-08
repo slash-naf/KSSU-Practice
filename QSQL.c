@@ -129,7 +129,18 @@ char prev_gameState;
 
 short conf_musicReset;
 
-int f(int pressed){
+int f(){
+
+	int pressed, held;
+	asm volatile(
+		"eor r0, r2, r0;"
+		"and %0, %0, r4;"
+		"strh %0, [r1, #0xE8];"
+		"mov %1, r4;"
+		: "=r"(pressed), "=r"(held)
+	);
+
+
 	//フロアに入ったときの座標などを記憶しておく
 	if(*getPos == 0){
 		tmp_pos = 0;
@@ -218,12 +229,12 @@ int f(int pressed){
 			case HELPER_TO_HERO:
 				//格闘王系のモードでのボスのロード
 				//R押しながらLで次のボスへ
-				if(R & *buttons){
+				if(R & held){
+					*gameState = STATE_ARENA_PROCEED;
+				}else{
 					*arena_idx = 0;
 					arena_bosses[0] = sav_arena_boss;
 					*gameState = STATE_ARENA_MATCH;
-				}else{
-					*gameState = STATE_ARENA_PROCEED;
 				}
 				break;
 			default:

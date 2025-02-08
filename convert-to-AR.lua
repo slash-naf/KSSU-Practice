@@ -64,17 +64,12 @@ function OToAR(path)	--オブジェクトファイルを読み込んで処理を
 end
 
 
-
 --ボタン入力処理に割り込ませる
 set(0x020017C0, 0xE92D5FFE)	--cmp r4,#0x0	->	stmdb  r13!,{r1-r12, lr}	;レジスタの退避
 call(0x020017C4, copyAddr)	--eor  r0,r2,r0	->	bl copyAddr	;関数呼び出し
 set(0x020017C8, 0xE8BD5FFE)	--and  r0,r0,r4	->	ldmia  r13!,{r1-r12, lr}	;レジスタの復元
 set(0x020017CC, 0xE3540000)	--strh r0,[r1, #+0xe8]	->	cmp r4,#0x0
 
---処理を割り込ませるために潰した処理を行う
-add(0xE0220000)	--eor  r0,r2,r0
-add(0xE0000004)	--and  r0,r0,r4
-add(0xE1C10EB8)	--strh r0,[r1, #+0xe8]
 
 --押されたボタンの情報が引数になった状態で関数に入る
 OToAR("QSQL.o")
