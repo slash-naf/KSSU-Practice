@@ -131,6 +131,7 @@ short conf_musicReset;
 
 int f(){
 
+	//処理を割り込ませるために潰した処理を行う
 	int pressed, held;
 	asm volatile(
 		"eor r0, r2, r0;"
@@ -140,7 +141,6 @@ int f(){
 		: "=r"(pressed), "=r"(held)
 	);
 
-
 	//フロアに入ったときの座標などを記憶しておく
 	if(*getPos == 0){
 		tmp_pos = 0;
@@ -149,11 +149,10 @@ int f(){
 		tmp_playerMode = *playerMode;
 	}
 
-	if(*timer < 0){*timer = 0;}
+	if(*timer < 0){*timer = 0;}	//タイマーリセット時にタイマーが動いてないとそのまま-1だから0にする
 
-
-	int qs = 0;
 	//場面別の処理
+	int qs = 0;
 	switch(*gameState){
 	case STATE_PAUSE:
 		//ポーズ時にL/RでQS
