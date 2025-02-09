@@ -273,6 +273,9 @@ int f(){
 				*playerMode = sav_playerMode;
 
 				switch(mode){
+				case DYNA_BLADE:
+					*db_switches = 0;
+					break;
 				case GCO:
 					//洞窟のお宝とボスをリセット
 					gco_treasures[0] = 0;
