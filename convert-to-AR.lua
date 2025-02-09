@@ -33,31 +33,29 @@ function OToAR(path)	--オブジェクトファイルを読み込んで処理を
 
 		--プログラムの部分を読込み
 		local i = 0x34
-		local n = binDword(data, i)
-		local varPtrAddr
-		while true do
+		local a = {}
+		local val = binDword(data, i)
+		i = i + 4
+		local nextVal = binDword(data, i)
+		while not(val == 0 and nextVal == 1) do
+			a[#a+1] = val
+			val = nextVal
 			i = i + 4
-			local nextVal = binDword(data, i)
-
-			if n == 0 then
-				if nextVal == 1 then
-					--グローバル変数のアドレスを設定
-					if varPtrAddr == nil then
-						add(copyAddr + 4)
-					else
-						set(varPtrAddr, copyAddr)
-					end
-					break
-				else
-					varPtrAddr = copyAddr
-					copyAddr = copyAddr + 4
-				end
-			else
-				add(n)
-			end
-
-			n = nextVal
+			nextVal = binDword(data, i)
 		end
+
+		local varAddr = #a * 4 + copyAddr
+
+		for i=1, #a do
+			if a[i] == 0 then
+				add(varAddr+a[i])
+			elseif a[i] < 0x400 then
+				add(a[i]+0x023FE000)
+			else
+				add(a[i])
+			end
+		end
+
 	else
 		ar = ar.."ファイル無い\r\n"
 	end
