@@ -322,6 +322,8 @@ int f(){
 		}
 	}
 
+	consumedItems[0] = 0;	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
+
 	prev_gameState = *gameState;	//前の gameState を記憶しておく
 
 	return pressed;
