@@ -43,6 +43,33 @@ enum GameMode{
 enum Music{
 	Music_MUTE = 0xFFFFFC19,
 };
+enum Ability{
+	NORMAL  = 1,
+	CUTTER  = 2,
+	MIRROR  = 3,
+	BEAM    = 4,
+	FIGHTER = 5,
+	SUPLEX  = 6,
+	YOYO    = 7,
+	WHEEL   = 8,
+	BOMB    = 9,
+	ICE     = 0xA,
+	FIRE    = 0xB,
+	PLASMA  = 0xC,
+	NINJA   = 0xD,
+	STONE   = 0xE,
+	WING    = 0xF,
+	JET     = 0x10,
+	COPY    = 0x11,
+	HAMMER  = 0x12,
+	SWORD   = 0x13,
+	PARASOL = 0x14,
+	PAINT   = 0x15,
+	MIKE    = 0x16,
+	CRASH   = 0x17,
+	COOK    = 0x18,
+	SLEEP   = 0x19,
+};
 
 int* const seed  = (int*)0x02041D3C;	//乱数
 int* const timer = (int*)0x02041D60;	//タイマー
@@ -76,7 +103,7 @@ char* const arena_bosses = (char*)0x0206FC66;	//格闘王系でのボスの並�
 
 int* const  mww_abilities               =  (int*)0x02070A40;	//銀河の開放済み能力
 char* const mww_abilitiesByStage        = (char*)0x02070A47;	//ステージごとの開放済み能力の数を記憶した長さ8の配列
-char* const mww_selectedAbility         = (char*)0x02070A5C;	//銀河の選択能力
+char* const mww_selectedAbility         = (char*)0x02070A5C;	//銀河の選択能力。能力自体の値とは別
 char* const mww_changingSelectedAbility = (char*)0x02070A5E;	//選択能力が遷移中なら1
 
 int* const  getPos = (int*)0x02076878;	//1Pの座標
@@ -88,11 +115,12 @@ char* const helperMaxHP = (char*)0x02076CDA;	//2Pの最大HP
 
 int* const displayMode = (int*)0x0209ECC4;	//スコア・ゴールドの所に何が表示されるか。0ならスコア・ゴールドを表示
 
-int* const  playerStates = (int*)0x020BA318;	//1Pの能力
+int* const  playerStates = (int*)0x020BA318;	//1Pの能力・状態
+char* const playerAbility = (char*)0x020BA31B;	//1Pの能力
 char* const playerRiding =(char*)0x020BA31D;	//ウィリーライダーなら2
 short* const playerInvincibility = (short*)0x020BA5CC;	//1Pのむてきキャンディ/1Pと2pのメタクイックの残り時間
 
-int* const  helperStates = (int*)0x020BAB34;	//2Pの能力
+int* const  helperStates = (int*)0x020BAB34;	//2Pの能力・状態
 char* const helperRode   =(char*)0x020BAB39;	//ウィリーライダーなら2
 short* const helperInvincibility = (short*)0x020BADE8;	//2Pのむてきキャンディの残り時間。メタクイックは1Pのが参照され、こっちは使われない
 
@@ -134,12 +162,12 @@ int f(){
 	//処理を割り込ませるために潰した処理を行う
 	int pressed, held;
 	asm volatile(
-		"eor r0, r2, r0;"
+		"eor %0, r2, r0;"
 		"and %0, %0, r4;"
 		"strh %0, [r1, #0xE8];"
-		"mov %1, r4;"
-		: "=r"(pressed), "=r"(held)
+		: "+r"(pressed)
 	);
+	asm volatile("mov %0, r4;" : "=r"(held));
 
 	//フロアに入ったときの座標などを記憶しておく
 	if(*getPos == 0){
@@ -154,6 +182,10 @@ int f(){
 	//場面別の処理
 	switch(*gameState){
 	case STATE_PAUSE:
+		//ポーズ時にXでジェットをセーブ
+		if(X & pressed){
+			((char*)(&sav_playerStates))[3] = JET;
+		}
 		//ポーズ時にL/RでQS
 		if((L | R) & pressed){goto QS;}
 		break;
