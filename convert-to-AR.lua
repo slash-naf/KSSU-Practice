@@ -48,8 +48,10 @@ function OToAR(path)	--オブジェクトファイルを読み込んで処理を
 
 		for i=1, #a do
 			if a[i] == 0 then
+				print("0:"..string.format("%08X ", copyAddr))
 				add(varAddr+a[i])
 			elseif a[i] < 0x400 then
+				print("1:"..string.format("%08X ", copyAddr))
 				add(a[i]+0x023FE000)
 			else
 				add(a[i])
@@ -68,13 +70,19 @@ call(0x020017C4, copyAddr)	--eor  r0,r2,r0	->	bl copyAddr	;関数呼び出し
 set(0x020017C8, 0xE8BD5FFE)	--and  r0,r0,r4	->	ldmia  r13!,{r1-r12, lr}	;レジスタの復元
 set(0x020017CC, 0xE3540000)	--strh r0,[r1, #+0xe8]	->	cmp r4,#0x0
 
+print("520017C0 E3540000")
+print(ar)
+print("D2000000 00000000")
+
+ar = ""
 
 --押されたボタンの情報が引数になった状態で関数に入る
 OToAR("QSQL.o")
 
 
-
+print("523FE000 00000000")
 print(ar)
+print("D2000000 00000000")
 
 
 
