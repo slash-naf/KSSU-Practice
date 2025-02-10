@@ -7,7 +7,7 @@ NDSForwarderを使っている場合は"usrcheat.dat"を"sd:/_nds/ntr-forwarder/
 ゲームを起動するときにYを押し続けるとメニューが表示される  
 Xを押すと、チートが表示され、Aで選択、Xで保存して戻る  
 STARTで保存して開始  
-デフォルトで全て有効になってるからそれで良ければメニュー開く必要は無い
+デフォルトで全て有効になってるからそれで良ければメニュー開く必要は無い  
 TWiLight Menu++の場合は"sd:/_nds/TWiLightMenu/extras/usrcheat.dat"に配置  
 ちなみにFTPDを使えば無線でファイルのやりとりができる
 
