@@ -1,3 +1,40 @@
+--文字列を分割して処理し配列にする
+function split(text, delimiter, func)
+	func = func or function(m) return m end
+	local result = {}
+	local pattern = string.format("([^%s]+)", delimiter)
+	for v in text:gmatch(pattern) do
+		result[#result + 1] = func(v)
+	end
+	return result
+end
+
+--コマンドを実行して結果を取得する
+function execute_cmd(cmd)
+	local handle = io.popen(cmd)
+	local result = handle:read('*a')
+	handle:close()
+	return result
+end
+
+--バイナリファイルを読み込み
+function read_file_bytes(path)
+	local file = io.open(path, "rb")
+	
+	-- ファイルサイズ取得
+	local cur = file:seek()
+	local size = file:seek("end")
+	file:seek("set", cur)
+
+	-- 全読込み
+	local data = file:read("*all")
+	file:close()
+
+	return data
+end
+
+
+
 
 --バイナリファイルのデータから4byte読み込み
 function binDword(s, i)
@@ -35,40 +72,61 @@ function patch(addr, a)	--Eコードで addr から 配列 a を一括書き込�
 end
 
 function patchFromFile(addr, path)
+	--readelfを使って解析
+	local readelf_data = execute_cmd([[llvm-readelf -S -r ]]..path)
 
-	local file = io.open( path, "rb" )
+	local section_text_offset = 0
+	local section_text_size = 0
+	local rel_text_symbol_text = {}
+	local rel_text_symbol_bss = {}
 	
-	if file ~= nil then
-		-- 全読込み
-		local data = file:read("*all")
-		file:close()
-
-		--プログラムの部分を読込み
-		local i = 0x34
-		local a = {}
-		local val = binDword(data, i)
-		i = i + 4
-		local nextVal = binDword(data, i)
-		while not(val == 0 and nextVal == 1) do
-			a[#a+1] = val
-			val = nextVal
-			i = i + 4
-			nextVal = binDword(data, i)
+	local cond = ""
+	split(readelf_data, "\r\n", function(row)
+		if string.sub(row, string.len(row)) == ":" then	--タイトルを判別
+			if row == "Section Headers:" then
+				cond = "Section Headers"
+			elseif string.find(row, "Relocation section '.rel.text'") ~= nil then
+				cond = ".rel.text"
+			else
+				cond = ""
+			end
+		elseif cond == "Section Headers" then
+			local fields = split(string.gsub(row, "%[", ""), " ")
+			if fields[2] == ".text" then
+				section_text_offset = tonumber(fields[5], 16)
+				section_text_size = tonumber(fields[6], 16)
+			end
+		elseif cond == ".rel.text" then
+			local fields = split(row, " ")
+			if fields[5] == ".text" then
+				table.insert(rel_text_symbol_text, tonumber(fields[1], 16))
+			elseif fields[5] == ".bss" then
+				table.insert(rel_text_symbol_bss, tonumber(fields[1], 16))
+			end
 		end
-		local varAddr = #a * 4 + addr
-		for i=1, #a do
-			if a[i] == 0 then
-				a[i] = varAddr
-			elseif a[i] < 0x400 then
-				a[i] = a[i] + addr
-			end	
-		end
+	end)
 
-		patch(addr, a)
-
-	else
-		print("ファイル無い")
+	--コードの部分を読み込む
+	local data = read_file_bytes(path)
+	local codes = {}
+	for i=1, section_text_size, 4 do
+		codes[#codes+1] = 
+		string.byte(data, i + section_text_offset) +
+		string.byte(data, i + 1 + section_text_offset) * 0x100 +
+		string.byte(data, i + 2 + section_text_offset) * 0x10000 +
+		string.byte(data, i + 3 + section_text_offset) * 0x1000000
 	end
+	--再配置
+	for i=1, #rel_text_symbol_text do
+		local n = rel_text_symbol_text[i] / 4 + 1
+		codes[n] = codes[n] + addr
+	end
+	for i=1, #rel_text_symbol_bss do
+		local n = rel_text_symbol_bss[i] / 4 + 1
+		codes[n] = codes[n] + addr + section_text_size
+	end
+
+	patch(addr, codes)
 end
 
 copyAddr = 0x023FE000	--プログラムのコピー先
