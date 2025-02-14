@@ -235,6 +235,7 @@ int f(){
 			}
 
 			//ゲームモード別の処理
+			int prev_gameStates = *gameStates;
 			int mode = (sav_gameStates >> 8) & 0xFF;
 
 			//能力
@@ -278,6 +279,15 @@ int f(){
 					gco_treasures[1] = 0;
 					*gco_treasuresCnt = 0;
 					*gco_bosses = 0;
+					break;
+				case RoMK:
+					//ロード先が最初のフロアで今同じステージならタイトルへ
+					if(
+						( (sav_gameStates & 0xFF000000) == 0) && 
+						( (sav_gameStates & 0x00FF0000) == (prev_gameStates & 0x00FF0000) )
+					){
+						*gameState = STATE_MAP;
+					}
 					break;
 				case MWW:
 					//銀河の開放済み能力とその選択位置をQL
