@@ -158,16 +158,12 @@ char prev_gameState;
 short conf_musicReset;
 
 int f(){
-
-	//処理を割り込ませるために潰した処理を行う
+	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
 	int pressed, held;
-	asm volatile(
-		"eor %0, r2, r0;"
-		"and %0, %0, r4;"
-		"strh %0, [r1, #0xE8];"
-		: "+r"(pressed)
-	);
+	asm volatile("and %0, r0, r4;" : "=r"(pressed));
 	asm volatile("mov %0, r4;" : "=r"(held));
+	asm volatile("strh r0, [r1, #0xE8];");
+
 
 	//フロアに入ったときの座標などを記憶しておく
 	if(*getPos == 0){
