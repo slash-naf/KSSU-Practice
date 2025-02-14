@@ -1,1 +1,0 @@
-@clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3
