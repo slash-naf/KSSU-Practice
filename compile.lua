@@ -33,7 +33,7 @@ function read_file_bytes(path)
 	return data
 end
 
-
+--メモリ書き込みとそのARコードの出力
 function writedword(addr, n)	--メモリ4byte書き込み
 	memory.writedword(addr, n)
 	print("0"..string.format("%07X ", addr)..string.format("%08X", n))
@@ -61,7 +61,15 @@ function patch(addr, a)	--配列で一括書き込み
 	end
 end
 
+--ARコードの出力
+function if_eq(addr, val)	--if(*(int*)addr == val)
+	print("5"..string.format("%07X ", addr)..string.format("%08X", val))
+end
+function d2()
+	print("D2000000 00000000")
+end
 
+--ARMの機械語を生成
 function read_ELF(addr, path)	--ELFを読み込む
 	--readelfを使って解析
 	local readelf_data = execute_cmd([[llvm-readelf -S -r ]]..path)
@@ -133,7 +141,7 @@ os.execute([[clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3 & pause]
 local copyAddr = 0x023FE000	--コードのコピー先
 
 --割り込ませる処理
-print("5"..string.format("%07X ", copyAddr).."00000000")
+if_eq(copyAddr, 0)
 
 local codes = read_ELF(copyAddr, "QSQL.o")
 
@@ -148,12 +156,12 @@ end
 
 patch(copyAddr, codes)
 
-print("D2000000 00000000")
+d2()
 
 
 
 --ボタン入力処理に割り込ませる
-print("520017C0 E3540000")
+if_eq(0x020017C0, 0xE3540000)
 
 patch(0x020017C0, {
 	0xE0220000,	--:020017C0 E3540000 cmp r4,#0x0	->	E0220000 eor r0,r2,r0
@@ -162,5 +170,4 @@ patch(0x020017C0, {
 	0xE3540000	--:020017CC	strh r0,[r1, #+0xe8]		->	E3540000 cmp r4,#0x0
 })
 
-print("D2000000 00000000")
-
+d2()
