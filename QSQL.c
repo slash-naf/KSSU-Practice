@@ -128,6 +128,9 @@ char* const menuPageIdx =(char*)0x021983CA;	//ポーズのメニューのペー�
 
 short* const buttons = (short*)0x04000130;	//押したボタンに対応するビットが0になる
 
+int tmp_seed;
+int sav_seed;
+
 int tmp_timer;
 
 int sav_gameStates;
@@ -153,9 +156,9 @@ short sav_helperInvincibility;
 
 char sav_arena_boss;
 
-char prev_gameState;
-
 short conf_musicReset;
+
+#define TIMER_RESET 0x1000000
 
 int f(){
 	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
@@ -165,15 +168,31 @@ int f(){
 	asm volatile("strh r0, [r1, #0xE8];");
 
 
-	//フロアに入ったときの座標などを記憶しておく
+	//フロア遷移時の処理
 	if(*getPos == 0){
-		tmp_pos = 0;
-	}else if(tmp_pos == 0){
-		tmp_pos = *getPos;
-		tmp_playerMode = *playerMode;
-	}
+		//座標が0になったら
+		if(tmp_pos != 0){
+			tmp_pos = 0;
 
-	if(*timer < 0){*timer = 0;}	//タイマーリセット時にタイマーが動いてないとそのまま-1だから0にする
+			if(*timer >= TIMER_RESET){	//QLなら
+				*timer = 0;
+
+				*seed = sav_seed;
+				*playerInvincibility = sav_playerInvincibility;
+				*helperInvincibility = sav_helperInvincibility;
+			}else{
+				tmp_seed = *seed;
+				tmp_playerInvincibility = *playerInvincibility;
+				tmp_helperInvincibility = *helperInvincibility;
+			}
+		}
+	}else{
+		//座標が0ではなくなったら
+		if(tmp_pos == 0){	
+			tmp_pos = *getPos;
+			tmp_playerMode = *playerMode;
+		}
+	}
 
 	//場面別の処理
 	switch(*gameState){
@@ -191,10 +210,8 @@ int f(){
 			//同じゲームモードで未QSならQSもする
 			if(((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) != (sav_gameStates & 0xFFFF)){
 			QS:
-				//フロアと座標と状態
+				//フロア
 				sav_gameStates = (*gameStates & 0xFFFFFF00) | STATE_FLOOR_LOAD;
-				sav_pos = tmp_pos;
-				sav_playerMode = tmp_playerMode;
 
 				//銀河
 				sav_mww_abilities = *mww_abilities;
@@ -206,12 +223,25 @@ int f(){
 				//能力
 				sav_playerStates = *playerStates;
 				sav_playerRiding = *playerRiding;
-				sav_playerInvincibility = tmp_playerInvincibility;
-
+				
 				sav_helperStates = *helperStates;
 				if(sav_helperStates == 0x08080101){sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
 				sav_helperRode   = *helperRode;
+
+
+
+				//乱数
+				sav_seed = tmp_seed;
+
+				//むてきキャンディ
+				sav_playerInvincibility = tmp_playerInvincibility;
 				sav_helperInvincibility = tmp_helperInvincibility;
+
+				//フロア遷移時の座標と状態
+				sav_pos = tmp_pos;
+				sav_playerMode = tmp_playerMode;
+
+
 
 				//ポーズからのQSの場合はQLしない
 				if(*gameState == STATE_PAUSE){
@@ -222,7 +252,7 @@ int f(){
 			}
 			
 			//タイマーリセット
-			*timer = -1;	//タイマーが動いてるとこのあと1進むのを考慮して-1にする
+			*timer = TIMER_RESET;	//QLの検知のため
 
 			//HPと残機を最大に
 			*playerHP = *playerMaxHP;
@@ -242,11 +272,9 @@ int f(){
 			if(mode != HELPER_TO_HERO){
 				*playerStates = sav_playerStates;
 				*playerRiding = sav_playerRiding;
-				*playerInvincibility = sav_playerInvincibility;
-
+				
 				*helperStates = sav_helperStates;
 				*helperRode   = sav_helperRode;
-				*helperInvincibility = sav_helperInvincibility;
 			}
 
 			switch(mode){
@@ -309,13 +337,6 @@ int f(){
 		break;
 	default:
 		tmp_timer = *timer;	//表示タイムの更新
-
-		//フロアのロードとかの開始時に
-		if(prev_gameState == STATE_PLAY){
-			//むてきキャンディの時間とかを記憶しておく
-			tmp_playerInvincibility = *playerInvincibility;
-			tmp_helperInvincibility = *helperInvincibility;
-		}
 	}
 
 	//タイムをスコア・ゴールドに表示
@@ -329,8 +350,6 @@ int f(){
 	}
 
 	consumedItems[0] = 0;	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
-
-	prev_gameState = *gameState;	//前の gameState を記憶しておく
 
 	return pressed;
 }
