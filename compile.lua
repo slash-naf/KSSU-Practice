@@ -20,6 +20,10 @@ end
 --バイナリファイルを読み込み
 function read_file_bytes(path)
 	local file = io.open(path, "rb")
+
+	if file == nil then
+		return nil
+	end
 	
 	-- ファイルサイズ取得
 	local cur = file:seek()
@@ -55,7 +59,10 @@ function patch(addr, a)	--配列で一括書き込み
 
 		local x = a[i+1] or 0
 
-		memory.writedword(addr + i * 4, x)
+		if i+1 <= #a then
+			memory.writedword(addr + i * 4, x)
+		end
+
 		print(string.format("%08X ", a[i])..string.format("%08X", x))
 
 	end
@@ -71,6 +78,11 @@ end
 
 --ARMの機械語を生成
 function read_ELF(addr, path)	--ELFを読み込む
+	local data = read_file_bytes(path)
+	if data == nil then
+		return nil
+	end
+
 	--readelfを使って解析
 	local readelf_data = execute_cmd([[llvm-readelf -S -r ]]..path)
 
@@ -78,6 +90,8 @@ function read_ELF(addr, path)	--ELFを読み込む
 	local section_text_size = 0
 	local rel_text_symbol_text = {}
 	local rel_text_symbol_bss = {}
+
+	local rel = {}
 	
 	local cond = ""
 	split(readelf_data, "\r\n", function(row)
@@ -101,12 +115,14 @@ function read_ELF(addr, path)	--ELFを読み込む
 				table.insert(rel_text_symbol_text, tonumber(fields[1], 16))
 			elseif fields[5] == ".bss" then
 				table.insert(rel_text_symbol_bss, tonumber(fields[1], 16))
+			else
+				rel[fields[5]] = tonumber(fields[1], 16)
+				print(fields[5])
 			end
 		end
 	end)
 
 	--コードの部分を読み込む
-	local data = read_file_bytes(path)
 	local codes = {}
 	for i=1, section_text_size, 4 do
 		codes[#codes+1] = 
@@ -125,6 +141,8 @@ function read_ELF(addr, path)	--ELFを読み込む
 		codes[n] = codes[n] + addr + section_text_size
 	end
 
+	codes.size = section_text_size
+	codes.rel = rel
 	return codes
 end
 function jump(addr, target)	--ジャンプ処理を返す
@@ -133,41 +151,93 @@ end
 function call(addr, target)	--関数呼び出し処理を返す
 	return tonumber("EB"..string.sub(string.format("%08X", (target - addr - 8) / 4), 3), 16)
 end
+nop = 0xE1A00000 --nop(mov r0,r0)
+ret = 0xE12FFF1E --bx r14
 
---コンパイル
-os.execute([[clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3 & pause]])
 
-
-local copyAddr = 0x023FE000	--コードのコピー先
-
---割り込ませる処理
-if_eq(copyAddr, 0)
-
-local codes = read_ELF(copyAddr, "QSQL.o")
-
-for i=1, #codes do
-	local n = codes[i] - (codes[i] % 0x2000)
-	if n == 0xE92D4000 then
-		codes[i] = 0xE92D5FFE	--レジスタの退避
-	elseif n == 0xE8BD8000 then
-		codes[i] = jump(copyAddr + (i-1) * 4, 0x020017C8)	--元のコードへのジャンプ
+function show()
+	for i=0x02090D48, 0x02090E3C, 4 do
+		memory.writedword(i, 0)
 	end
+	memory.writedword(0x02090D48, ret)
+
+
+	--コンパイル
+	os.execute([[clang -target armv5-none-none-eabi -c show.c -o show.o -Oz & pause]])
+
+
+	local copyAddr = 0x02090D48	--コードのコピー先(残機表示関数)
+
+	local codes = read_ELF(copyAddr, "show.o")
+	if codes == nil then
+		return
+	end
+--[[
+	codes[codes.rel["digits"] / 4 + 1] = copyAddr + codes.size
+	codes[#codes+1] = 1000
+	codes[#codes+1] = 100
+	codes[#codes+1] = 10
+	codes[#codes+1] = 1
+
+	codes[codes.rel["show_numbers"] / 4 + 1] = copyAddr + codes.size + 4 * 4
+]]
+	if_eq(copyAddr, 0xE92D41F0)
+
+	patch(copyAddr, codes)
+
+	d2()
 end
 
-patch(copyAddr, codes)
+function QSQL()
+	--コンパイル
+	os.execute([[clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3 & pause]])
 
-d2()
+
+	local codes = read_ELF(copyAddr, "QSQL.o")
+	if codes == nil then
+		return
+	end
+
+
+	local copyAddr = 0x023FE000	--コードのコピー先
+
+	--割り込ませる処理
+	if_eq(copyAddr, 0)
+
+	for i=1, #codes do
+		local n = codes[i] - (codes[i] % 0x2000)
+		if n == 0xE92D4000 then
+			codes[i] = 0xE92D5FFE	--レジスタの退避
+		elseif n == 0xE8BD8000 then
+			codes[i] = jump(copyAddr + (i-1) * 4, 0x020017C8)	--元のコードへのジャンプ
+		end
+	end
+
+	patch(copyAddr, codes)
+
+	d2()
 
 
 
---ボタン入力処理に割り込ませる
-if_eq(0x020017C0, 0xE3540000)
+	--ボタン入力処理に割り込ませる
+	if_eq(0x020017C0, 0xE3540000)
 
-patch(0x020017C0, {
-	0xE0220000,	--:020017C0 E3540000 cmp r4,#0x0	->	E0220000 eor r0,r2,r0
-	jump(0x020017C4, copyAddr),	--:020017C4 eor r0,r2,r0	->	b copyAddr	;割り込ませる処理へのジャンプ
-	0xE8BD5FFE,	--:020017C8	and  r0,r0,r4	->	ldmia  r13!,{r1-r12, lr}	;レジスタの復元
-	0xE3540000	--:020017CC	strh r0,[r1, #+0xe8]		->	E3540000 cmp r4,#0x0
-})
+	patch(0x020017C0, {
+		0xE0220000,	--:020017C0 E3540000 cmp r4,#0x0	->	E0220000 eor r0,r2,r0
+		jump(0x020017C4, copyAddr),	--:020017C4 eor r0,r2,r0	->	b copyAddr	;割り込ませる処理へのジャンプ
+		0xE8BD5FFE,	--:020017C8	and  r0,r0,r4	->	ldmia  r13!,{r1-r12, lr}	;レジスタの復元
+		0xE3540000	--:020017CC	strh r0,[r1, #+0xe8]		->	E3540000 cmp r4,#0x0
+	})
 
-d2()
+	d2()
+end
+
+
+
+show()
+
+
+
+
+
+
