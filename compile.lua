@@ -157,7 +157,7 @@ ret = 0xE12FFF1E --bx r14
 
 function show()
 	for i=0x02090D48, 0x02090E3C, 4 do
-		memory.writedword(i, 0)
+		--memory.writedword(i, 0)
 	end
 	memory.writedword(0x02090D48, ret)
 
@@ -172,15 +172,13 @@ function show()
 	if codes == nil then
 		return
 	end
---[[
-	codes[codes.rel["digits"] / 4 + 1] = copyAddr + codes.size
-	codes[#codes+1] = 1000
-	codes[#codes+1] = 100
-	codes[#codes+1] = 10
-	codes[#codes+1] = 1
 
-	codes[codes.rel["show_numbers"] / 4 + 1] = copyAddr + codes.size + 4 * 4
-]]
+
+	codes[codes.rel["digits"] / 4 + 1] = copyAddr + codes.size
+	codes[#codes+1] = 1000 + 100 * 0x10000
+	codes[#codes+1] =   10 +   1 * 0x10000
+
+
 	if_eq(copyAddr, 0xE92D41F0)
 
 	patch(copyAddr, codes)
