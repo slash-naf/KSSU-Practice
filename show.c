@@ -17,7 +17,6 @@ void f(int some_addr, int x_pos, int y_pos, int lives){
 
 	int x = 0x3C - 19;
 
-	int i = 0;
 	for(int i=0; i < show_numbers_LEN; i++){
 
 		unsigned int num = show_numbers[i];
@@ -41,7 +40,7 @@ void f(int some_addr, int x_pos, int y_pos, int lives){
 			draw(0x78, img, 0, x, y_pos, 1);	//数字描画
 
 			x += 10;
-		};
+		}
 		x += 8;
 	}
 
