@@ -69,8 +69,17 @@ function patch(addr, a)	--配列で一括書き込み
 end
 
 --ARコードの出力
+function if_lt(addr, val)	--if(*(int*)addr < val)
+	print("3"..string.format("%07X ", addr)..string.format("%08X", val))
+end
+function if_gt(addr, val)	--if(*(int*)addr > val)
+	print("4"..string.format("%07X ", addr)..string.format("%08X", val))
+end
 function if_eq(addr, val)	--if(*(int*)addr == val)
 	print("5"..string.format("%07X ", addr)..string.format("%08X", val))
+end
+function if_ne(addr, val)	--if(*(int*)addr != val)
+	print("6"..string.format("%07X ", addr)..string.format("%08X", val))
 end
 function d2()
 	print("D2000000 00000000")
@@ -174,15 +183,27 @@ function show()
 	end
 
 
-	codes[codes.rel["digits"] / 4 + 1] = copyAddr + codes.size
-	codes[#codes+1] = 1000 + 100 * 0x10000
-	codes[#codes+1] =   10 +   1 * 0x10000
-
 
 	if_eq(copyAddr, 0xE92D41F0)
 
 	patch(copyAddr, codes)
 
+	d2()
+
+
+
+
+
+	--スコア・ゴールドを消す
+	copyAddr = 0x020904C8
+	if_eq(copyAddr, 0xE92D4FF8)
+	writedword(copyAddr, ret)
+	d2()
+
+	--タイマーを消す
+	copyAddr = 0x020905A4
+	if_eq(copyAddr, 0xE92D41F0)
+	writedword(copyAddr, ret)
 	d2()
 end
 
@@ -235,6 +256,10 @@ end
 show()
 
 
+memory.writedword(0x02090E30, 75555)
+memory.writedword(0x02090E34, 260421)
+memory.writedword(0x02090E38, 266977)
+memory.writedword(0x02090E3C, 500250)
 
 
 

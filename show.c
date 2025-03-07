@@ -6,11 +6,7 @@ typedef void Draw(int, int, int, int, int, int);
 Draw* const draw = (Draw*)0x0200FE64;
 
 const int max_digit = 10000;
-const int max_digit_mask = 0x3FFF;
-#define TIMER_RESET 0x1000000
-
-#define DIGITS_LEN 4
-const short digits[4] = {1000, 100, 10, 1};
+#define TIMER_RESET 0x40000
 
 //残機描画関数(0x02090D48)の中身を書き換える
 void f(int some_addr, int x_pos, int y_pos, int lives){
@@ -21,15 +17,25 @@ void f(int some_addr, int x_pos, int y_pos, int lives){
 
 		unsigned int num = show_numbers[i];
 
+		unsigned int digit = max_digit;
+
+
 		if(num >= TIMER_RESET){
 			num = 0;
 		}
-		num &= max_digit_mask;
-		if(num >= max_digit){num -= max_digit;}
 
-		for(int j=0; j < DIGITS_LEN; j++){
 
-			int digit = digits[j];
+		//	num = num % digit;	b0	f4
+		while(num >= digit){
+			//num -= digit;
+			asm volatile("sub %0, %0, %1;" : "+r"(num) : "r"(digit));	//最適化抑制
+		}
+		
+
+
+		do{
+
+			digit = (digit * 205) >> 11;	//num /= 10;
 
 			int img = 0x021e2668;
 			while(num >= digit){
@@ -40,8 +46,11 @@ void f(int some_addr, int x_pos, int y_pos, int lives){
 			draw(0x78, img, 0, x, y_pos, 1);	//数字描画
 
 			x += 10;
-		}
+
+		}while(digit > 1);
+
 		x += 8;
+
 	}
 
 }

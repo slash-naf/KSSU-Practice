@@ -158,7 +158,7 @@ char sav_arena_boss;
 
 short conf_musicReset;
 
-#define TIMER_RESET 0x1000000
+#define TIMER_RESET 0x40000
 
 int f(){
 	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
