@@ -172,7 +172,8 @@ function show()
 
 
 	--コンパイル
-	os.execute([[clang -target armv5-none-none-eabi -c show.c -o show.o -Oz & pause]])
+	--os.execute([[clang -target armv5-none-none-eabi -c show.c -o show.o -Oz & pause]])
+	os.execute([[clang -target armv5-none-none-eabi -c show.c -o show.o & pause]])
 
 
 	local copyAddr = 0x02090D48	--コードのコピー先(残機表示関数)
@@ -181,6 +182,68 @@ function show()
 	if codes == nil then
 		return
 	end
+
+
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+
+	table.remove(codes, #codes)
+	table.remove(codes, #codes)
+
+	local draw = 0x0200FE64;	--描画の関数
+	local number_images_addr = 0x021e2668;
+	codes[#codes + 1] = number_images_addr
+
+	local numbers_loop = 0
+	local divide_loop = 0
+	local digit_loop = 0
+	local dd = 0
+
+	for i=1, #codes do
+		--if codes[i] == 0xE59F80C0 then
+		--	print(string.format("%08X", (#codes - i - 2) * 4))
+		--end
+
+		--if codes[i] == 0xE3A050D0 then
+		--	codes[i] = 0xE3A05000 + (#codes - i) * 4	--次の行で使う
+		--	print("show_numbers = "..string.format("%08X", codes[i]))
+		--end
+
+		if codes[i] == 0xE1A00000 then
+			codes[i] = call(copyAddr + (i-1) * 4, draw)
+		end
+
+		if codes[i] == 0xE79F6005 then
+			numbers_loop = i
+		elseif codes[i] == 0x11A01001 then
+			codes[i] = jump(i * 4, numbers_loop * 4) - 0xE0000000 + 0x10000000
+		end
+
+		if codes[i] == 0xE1560007 then
+			divide_loop = i
+		elseif codes[i] == 0x21A00000 then
+			codes[i] = jump(i * 4, divide_loop * 4) - 0xE0000000 + 0x20000000
+		end
+
+		if codes[i] == 0xE0070997 then
+			digit_loop = i
+		elseif codes[i] == 0x11A00000 then
+			codes[i] = jump(i * 4, digit_loop * 4) - 0xE0000000 + 0x10000000
+		end
+
+		if codes[i] == 0xE1560007 then
+			dd = i
+		elseif codes[i] == 0x21A01001 then
+			codes[i] = jump(i * 4, dd * 4) - 0xE0000000 + 0x20000000
+		end
+	end
+
+
+
+	print("show_numbers = "..string.format("%08X", copyAddr + #codes * 4))
 
 
 
@@ -250,16 +313,6 @@ function QSQL()
 
 	d2()
 end
-
-
-
-show()
-
-
-memory.writedword(0x02090E30, 75555)
-memory.writedword(0x02090E34, 260421)
-memory.writedword(0x02090E38, 266977)
-memory.writedword(0x02090E3C, 500250)
 
 
 
