@@ -281,14 +281,12 @@ function QSQL()
 	--コンパイル
 	os.execute([[clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3 & pause]])
 
+	local copyAddr = 0x023FE000	--コードのコピー先
 
 	local codes = read_ELF(copyAddr, "QSQL.o")
 	if codes == nil then
 		return
 	end
-
-
-	local copyAddr = 0x023FE000	--コードのコピー先
 
 	--割り込ませる処理
 	if_eq(copyAddr, 0)
@@ -321,6 +319,6 @@ function QSQL()
 	d2()
 end
 
-
+QSQL()
 
 

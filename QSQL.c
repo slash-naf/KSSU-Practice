@@ -131,8 +131,6 @@ short* const buttons = (short*)0x04000130;	//押したボタンに対応する�
 int tmp_seed;
 int sav_seed;
 
-int tmp_timer;
-
 int sav_gameStates;
 
 int sav_playerStates;
@@ -159,6 +157,14 @@ char sav_arena_boss;
 short conf_musicReset;
 
 #define TIMER_RESET 0x40000
+int* const show_numbers = (int*)0x02090DD8;	//自前で作った4桁の数値4つ
+enum ShowNumber{
+	SHOW_TIMER,
+	SHOW_SEED_ADVANCES,
+	SHOW_NARROWED_SEED_ADVANCES,
+	SHOW_SEED,
+};
+
 
 int f(){
 	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
@@ -185,6 +191,8 @@ int f(){
 				tmp_playerInvincibility = *playerInvincibility;
 				tmp_helperInvincibility = *helperInvincibility;
 			}
+
+			show_numbers[SHOW_SEED] = *seed;
 		}
 	}else{
 		//座標が0ではなくなったら
@@ -336,17 +344,7 @@ int f(){
 		}
 		break;
 	default:
-		tmp_timer = *timer;	//表示タイムの更新
-	}
-
-	//タイムをスコア・ゴールドに表示
-	if(*gameMode < 7){
-		*displayMode = 0;
-		if(*gameMode == GCO){
-			*gco_gold = tmp_timer;
-		}else{
-			*score = tmp_timer;
-		}
+		show_numbers[SHOW_TIMER] = *timer;	//表示タイムの更新
 	}
 
 	consumedItems[0] = 0;	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
