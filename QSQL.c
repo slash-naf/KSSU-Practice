@@ -157,14 +157,14 @@ char sav_arena_boss;
 short conf_musicReset;
 
 #define TIMER_RESET 0x40000
-int* const show_numbers = (int*)0x02090DD8;	//自前で作った4桁の数値4つ
-enum ShowNumber{
-	SHOW_TIMER,
-	SHOW_SEED_ADVANCES,
-	SHOW_NARROWED_SEED_ADVANCES,
-	SHOW_SEED,
-};
 
+typedef struct{
+	int timer;
+	int seed_advances;
+	int narrowed_seed_advances;
+	int seed;
+}Show;
+Show* const show = (Show*)0x02090DD8;	//自前で作った4桁の数値4つ
 
 int f(){
 	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
@@ -192,7 +192,7 @@ int f(){
 				tmp_helperInvincibility = *helperInvincibility;
 			}
 
-			show_numbers[SHOW_SEED] = *seed;
+			(*show).seed = *seed;
 		}
 	}else{
 		//座標が0ではなくなったら
@@ -344,7 +344,7 @@ int f(){
 		}
 		break;
 	default:
-		show_numbers[SHOW_TIMER] = *timer;	//表示タイムの更新
+		(*show).timer = *timer;	//表示タイムの更新
 	}
 
 	consumedItems[0] = 0;	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
