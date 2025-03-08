@@ -268,6 +268,13 @@ function show()
 	if_eq(copyAddr, 0xE92D41F0)
 	writedword(copyAddr, ret)
 	d2()
+
+	--vs～を消す
+	copyAddr = 0x0208E7E4
+	if_eq(copyAddr, 0xE59010C8)
+	writedword(copyAddr, 0xE3A01000)	--ldr r1, [r0, #C8]	->	mov r1, 0
+	d2()
+
 end
 
 function QSQL()
