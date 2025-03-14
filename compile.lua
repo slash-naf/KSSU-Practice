@@ -86,7 +86,7 @@ function d2()
 end
 
 --ARMの機械語を生成
-function read_ELF(addr, path)	--ELFを読み込む
+function read_ELF(addr, path, arr)	--ELFを読み込む
 	local data = read_file_bytes(path)
 	if data == nil then
 		return nil
@@ -145,9 +145,14 @@ function read_ELF(addr, path)	--ELFを読み込む
 		local n = rel_text_symbol_text[i] / 4 + 1
 		codes[n] = codes[n] + addr
 	end
+	if arr ~= nil then
+		for i=1, #arr do
+			codes[#codes + 1] = arr[i]
+		end
+	end
 	for i=1, #rel_text_symbol_bss do
 		local n = rel_text_symbol_bss[i] / 4 + 1
-		codes[n] = codes[n] + addr + section_text_size
+		codes[n] = codes[n] + addr + #codes*4
 	end
 
 	codes.size = section_text_size
@@ -283,10 +288,13 @@ function QSQL()
 
 	local copyAddr = 0x023FE000	--コードのコピー先
 
-	local codes = read_ELF(copyAddr, "QSQL.o")
+	local codes = read_ELF(copyAddr, "QSQL.o", {0, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C})
 	if codes == nil then
 		return
 	end
+
+	local n = codes.rel["RoMK_positions"] / 4 + 1
+	codes[n] = codes[n] + copyAddr + codes.size
 
 	--割り込ませる処理
 	if_eq(copyAddr, 0)

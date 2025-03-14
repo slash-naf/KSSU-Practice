@@ -156,6 +156,9 @@ char sav_arena_boss;
 
 short conf_musicReset;
 
+
+const int RoMK_positions[7] = {0, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
+
 #define TIMER_RESET 0x40000
 
 int seed_advances;
@@ -249,8 +252,13 @@ int f(){
 				sav_playerInvincibility = tmp_playerInvincibility;
 				sav_helperInvincibility = tmp_helperInvincibility;
 
-				//フロア遷移時の座標と状態
-				sav_pos = tmp_pos;
+				//フロア遷移時の座標
+				if( (sav_gameStates & 0xFF00FF00) == 0x00000400 && (sav_gameStates >> 16) < 7 ){
+					sav_pos = RoMK_positions[sav_gameStates >> 16];
+				}else{
+					sav_pos = tmp_pos;
+				}
+				//フロア遷移時の状態
 				sav_playerMode = tmp_playerMode;
 
 
@@ -318,8 +326,6 @@ int f(){
 					gco_treasures[1] = 0;
 					*gco_treasuresCnt = 0;
 					*gco_bosses = 0;
-					break;
-				case RoMK:
 					break;
 				case MWW:
 					//銀河の開放済み能力とその選択位置をQL
