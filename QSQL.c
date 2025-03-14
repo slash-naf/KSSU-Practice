@@ -157,7 +157,7 @@ char sav_arena_boss;
 short conf_musicReset;
 
 
-const int RoMK_positions[7] = {0, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
+const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
 #define TIMER_RESET 0x40000
 
@@ -171,13 +171,17 @@ typedef struct{
 }Show;
 Show* const show = (Show*)0x02090DD8;	//自前で作った4桁の数値4つ
 
-int f(){
+int f(int pressed, int r1){
 	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
-	int pressed, held;
-	asm volatile("and %0, r0, r4;" : "=r"(pressed));
-	asm volatile("mov %0, r4;" : "=r"(held));
-	asm volatile("strh r0, [r1, #0xE8];");
+	int held;
+	asm volatile(
+		"and %0, %0, r4;" 
+		"mov %1, r4;"
+		"strh %0, [%2, #0xE8];"
+		: "+r"(pressed), "+r"(held), "+r"(r1)
+	);
 
+	consumedItems[0] = 0;	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
 
 	//フロア遷移時の処理
 	if(*getPos == 0){
@@ -253,8 +257,11 @@ int f(){
 				sav_helperInvincibility = tmp_helperInvincibility;
 
 				//フロア遷移時の座標
-				if( (sav_gameStates & 0xFF00FF00) == 0x00000400 && (sav_gameStates >> 16) < 7 ){
-					sav_pos = RoMK_positions[sav_gameStates >> 16];
+				if( (sav_gameStates & 0xFF00FF00) == 0x00000400){	//メタ逆のステージ最初のフロアなら
+					int chapter = sav_gameStates >> 16;
+					if(chapter < 7){
+						sav_pos = RoMK_positions[chapter];
+					}
 				}else{
 					sav_pos = tmp_pos;
 				}
@@ -349,7 +356,6 @@ int f(){
 		(*show).timer = *timer;	//表示タイムの更新
 	}
 
-	consumedItems[0] = 0;	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
 
 	return pressed;
 }

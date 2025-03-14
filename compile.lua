@@ -86,7 +86,7 @@ function d2()
 end
 
 --ARMの機械語を生成
-function read_ELF(addr, path, arr)	--ELFを読み込む
+function read_ELF(addr, path, bss_addr)	--ELFを読み込む
 	local data = read_file_bytes(path)
 	if data == nil then
 		return nil
@@ -145,14 +145,12 @@ function read_ELF(addr, path, arr)	--ELFを読み込む
 		local n = rel_text_symbol_text[i] / 4 + 1
 		codes[n] = codes[n] + addr
 	end
-	if arr ~= nil then
-		for i=1, #arr do
-			codes[#codes + 1] = arr[i]
-		end
+	if bss_addr == nil then
+		bss_addr = addr + #codes*4
 	end
 	for i=1, #rel_text_symbol_bss do
 		local n = rel_text_symbol_bss[i] / 4 + 1
-		codes[n] = codes[n] + addr + #codes*4
+		codes[n] = codes[n] + bss_addr
 	end
 
 	codes.size = section_text_size
@@ -287,24 +285,37 @@ function QSQL()
 	os.execute([[clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3 & pause]])
 
 	local copyAddr = 0x023FE000	--コードのコピー先
+	local bssAddr = 0x023FE500	--変数のアドレス
 
-	local codes = read_ELF(copyAddr, "QSQL.o", {0, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C})
+	local codes = read_ELF(copyAddr, "QSQL.o", bssAddr)
 	if codes == nil then
 		return
 	end
 
 	local n = codes.rel["RoMK_positions"] / 4 + 1
 	codes[n] = codes[n] + copyAddr + codes.size
+	local RoMK_positions = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C}
+	for i=1, #RoMK_positions do
+		codes[#codes+1] = RoMK_positions[i]
+	end
 
 	--割り込ませる処理
 	if_eq(copyAddr, 0)
 
 	for i=1, #codes do
-		local n = codes[i] - (codes[i] % 0x2000)
-		if n == 0xE92D4000 then
-			codes[i] = 0xE92D5FFE	--レジスタの退避
-		elseif n == 0xE8BD8000 then
-			codes[i] = jump(copyAddr + (i-1) * 4, 0x020017C8)	--元のコードへのジャンプ
+		local n = (codes[i] % 0x10000000) - (codes[i] % 0x2000)
+		local cond = codes[i] - (codes[i] % 0x10000000)
+
+		if n == 0x092D4000 then	--stmdb sp!, {lr}
+			print(string.format("%04X\t", (i-1)*4) .. string.format("%08X", codes[i]))
+
+			codes[i] = 0x092D5FFE + cond	--stmdb sp!, {r1-r12, lr}	レジスタの退避
+
+		elseif n == 0x08BD8000 then	--ldmia sp!, {pc}	レジスタの復元とリターン
+			print(string.format("%04X\t", (i-1)*4) .. string.format("%08X", codes[i]))
+
+			codes[i] = jump(copyAddr + (i-1) * 4, 0x020017C8) - 0xE0000000 + cond	--元のコードへのジャンプ
+
 		end
 	end
 
