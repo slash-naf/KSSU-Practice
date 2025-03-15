@@ -156,13 +156,13 @@ char sav_arena_boss;
 
 short conf_musicReset;
 
-
+//再配置する
 const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
 #define TIMER_RESET 0x40000
 
-int seed_advances;
-int narrowed_seed_advances;
+short* const seed_advances = (short*)0x023FE57C;
+short* const narrowed_seed_advances = (short*)0x023FE57E;
 typedef struct{
 	int timer;
 	int seed_advances;
@@ -202,8 +202,8 @@ int f(int pressed, int r1){
 			}
 
 			(*show).seed = *seed;
-			(*show).seed_advances = seed_advances;
-			(*show).narrowed_seed_advances = narrowed_seed_advances;
+			(*show).seed_advances = *seed_advances;
+			(*show).narrowed_seed_advances = *narrowed_seed_advances;
 		}
 	}else{
 		//座標が0ではなくなったら
@@ -260,7 +260,7 @@ int f(int pressed, int r1){
 				if( (sav_gameStates & 0xFF00FF00) == 0x00000400){	//メタ逆のステージ最初のフロアなら
 					int chapter = sav_gameStates >> 16;
 					if(chapter < 7){
-						sav_pos = RoMK_positions[chapter];
+						sav_pos = RoMK_positions[-chapter];
 					}
 				}else{
 					sav_pos = tmp_pos;

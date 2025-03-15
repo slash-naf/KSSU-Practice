@@ -292,12 +292,12 @@ function QSQL()
 		return
 	end
 
-	local n = codes.rel["RoMK_positions"] / 4 + 1
-	codes[n] = codes[n] + copyAddr + codes.size
-	local RoMK_positions = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C}
-	for i=1, #RoMK_positions do
+	local RoMK_positions = {0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C}
+	for i=#RoMK_positions, 1, -1 do
 		codes[#codes+1] = RoMK_positions[i]
 	end
+	local n = codes.rel["RoMK_positions"] / 4 + 1
+	codes[n] = codes[n] + copyAddr + codes.size + 4 * #RoMK_positions
 
 	--割り込ませる処理
 	if_eq(copyAddr, 0)
