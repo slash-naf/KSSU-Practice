@@ -338,6 +338,111 @@ function QSQL()
 	d2()
 end
 
-QSQL()
+function seed_advances()
+
+	--コンパイル
+	--os.execute([[clang -target armv5-none-none-eabi -c seed_advances.c -o seed_advances.o -O3 & pause]])
+
+	local copyAddr = 0x023FE5A4	--コードのコピー先
+
+	local codes = read_ELF(copyAddr, "seed_advances.o", bssAddr)
+	if codes == nil then
+		return
+	end
+
+	codes[#codes+1] = 0x02041D3C	--seed
+	codes[#codes+1] = 0x02090DD8	--show
+
+	local update_func = 0
+
+	for i=1, #codes do
+		if codes[i] == 0x01A00000 then
+			codes[i] = jump(0x5BC, 0x5D0) - 0xE0000000
+
+		elseif i < #codes - 5 and codes[i] == ret then
+			codes[i] = jump(copyAddr + (i-1)*4, 0x0200B8B8)
+			update_func = copyAddr + i*4
+
+		else
+			local n = codes[i] - codes[i] % 0x10000
+			if n == 0xE15F0000 or n == 0xE14F0000 then
+				n = codes[i] % 0x1000
+
+				if n == 0x1B4 then	--seed_advances = (short*)0x023FE57C;
+					local ofs = (copyAddr + i*4 + 4) - 0x023FE57C
+					local a = ofs % 0x10
+					codes[i] = codes[i] - n + (ofs - a) * 0x10 + 0x0b0 + a
+				elseif n == 0x1B2 then	--narrowed_seed_advances = (short*)0x023FE57E;
+					local ofs = (copyAddr + i*4 + 4) - 0x023FE57E
+					local a = ofs % 0x10
+					codes[i] = codes[i] - n + (ofs - a) * 0x10 + 0x0b0 + a
+				end
+			end
+		end
+	end
+	
+	--print(string.format("%08X", update_func))
+	local copyAddr2 = 0x023FE580
+	local codes2 = {}
+
+	local randi_func = 0x0200B8A4
+	local stmdb = 0xE92D41F0	--stmdb sp!, {r4-r8,lr}
+	local ldmia = 0xE8BD41F0	--ldmia sp!, {r4-r8,lr}
 
 
+	local randi_with_update = copyAddr2
+
+	codes2[#codes2+1] = stmdb
+	codes2[#codes2+1] = call(copyAddr2 + #codes2*4, randi_func)
+	codes2[#codes2+1] = call(copyAddr2 + #codes2*4, update_func)
+	codes2[#codes2+1] = ldmia
+	codes2[#codes2+1] = ret
+
+	local update_on_setting_destruction_timer = copyAddr2 + #codes2 * 4
+
+	codes2[#codes2+1] = stmdb
+	codes2[#codes2+1] = call(copyAddr2 + #codes2*4, update_func)
+	codes2[#codes2+1] = ldmia
+	codes2[#codes2+1] = jump(copyAddr2 + #codes2*4, 0x020b5824)
+
+	for i=1, #codes do
+		codes2[#codes2+1] = codes[i]
+	end
+
+
+	local add_randi_count = copyAddr
+
+
+	--割り込ませる処理
+	if_eq(copyAddr2, 0)
+
+	patch(copyAddr2, codes2)
+
+	d2()
+
+	local addr = 0
+
+	--add_randi_count
+	addr = 0x0200b8b4
+	if_eq(addr, 0xE59324A4)
+	writedword(addr, jump(addr, add_randi_count))
+	d2()
+
+	--update_on_setting_destruction_timer
+	addr = 0x020B5804
+	if_eq(addr, 0xEA000006)
+	writedword(addr, jump(addr, update_on_setting_destruction_timer))
+	d2()
+
+	--randi_with_update
+	local set_randi = function(addr)
+		if_eq(addr, call(addr, randi_func))
+		writedword(addr,  call(addr, randi_with_update))
+		d2()
+	end
+
+	set_randi(0x20c42a0)	--星
+
+end
+
+seed_advances()
