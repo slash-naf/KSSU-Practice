@@ -190,6 +190,9 @@ int f(int pressed, int r1){
 			tmp_pos = 0;
 
 			if(*timer >= TIMER_RESET){	//QLなら
+				*seed_advances = 0;
+				*narrowed_seed_advances = 0;
+
 				*timer = 0;
 
 				*seed = sav_seed;
