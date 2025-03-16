@@ -341,7 +341,7 @@ end
 function seed_advances()
 
 	--コンパイル
-	--os.execute([[clang -target armv5-none-none-eabi -c seed_advances.c -o seed_advances.o -O3 & pause]])
+	os.execute([[clang -target armv5-none-none-eabi -c seed_advances.c -o seed_advances.o -O3 & pause]])
 
 	local copyAddr = 0x023FE5A4	--コードのコピー先
 
@@ -353,15 +353,20 @@ function seed_advances()
 	codes[#codes+1] = 0x02041D3C	--seed
 	codes[#codes+1] = 0x02090DD8	--show
 
+	local add_from_advance_seed = copyAddr
+	local add_from_randi = 0
 	local update_func = 0
 
 	for i=1, #codes do
-		if codes[i] == 0x01A00000 then
-			codes[i] = jump(0x5BC, 0x5D0) - 0xE0000000
+		if codes[i] == 0x01A00000 then	--moveq r0, r0	->	b
+			codes[i] = jump(0, 0x14) - 0xE0000000
 
 		elseif i < #codes - 5 and codes[i] == ret then
-			codes[i] = jump(copyAddr + (i-1)*4, 0x0200B8B8)
-			update_func = copyAddr + i*4
+			if add_from_randi == 0 then
+				add_from_randi = copyAddr + i*4
+			elseif update_func == 0 then
+				update_func = copyAddr + i*4
+			end
 
 		else
 			local n = codes[i] - codes[i] % 0x10000
@@ -410,7 +415,6 @@ function seed_advances()
 	end
 
 
-	local add_randi_count = copyAddr
 
 
 	--割り込ませる処理
@@ -422,10 +426,16 @@ function seed_advances()
 
 	local addr = 0
 
-	--add_randi_count
-	addr = 0x0200b8b4
-	if_eq(addr, 0xE59324A4)
-	writedword(addr, jump(addr, add_randi_count))
+	--
+	addr = 0x0200B88C
+	if_eq(addr, 0xE58204A4)
+	writedword(addr, jump(addr, add_from_advance_seed))
+	d2()
+
+	--
+	addr = 0x0200B8D0
+	if_eq(addr, 0xE58314A4)
+	writedword(addr, jump(addr, add_from_randi))
 	d2()
 
 	--update_on_setting_destruction_timer
