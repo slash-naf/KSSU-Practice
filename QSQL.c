@@ -161,6 +161,7 @@ const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0
 
 #define TIMER_RESET 0x40000
 
+int* const monitor_RNG = (int*)0x023FE580;
 short* const seed_advances = (short*)0x023FE57C;
 short* const narrowed_seed_advances = (short*)0x023FE57E;
 typedef struct{
@@ -190,18 +191,23 @@ int f(int pressed, int r1){
 			tmp_pos = 0;
 
 			if(*timer >= TIMER_RESET){	//QLなら
+				*playerInvincibility = sav_playerInvincibility;
+				*helperInvincibility = sav_helperInvincibility;
+
+
 				*seed_advances = 0;
 				*narrowed_seed_advances = 0;
 
 				*timer = 0;
 
-				*seed = sav_seed;
-				*playerInvincibility = sav_playerInvincibility;
-				*helperInvincibility = sav_helperInvincibility;
+				if(*monitor_RNG != 0){
+					*seed = sav_seed;
+				}
 			}else{
-				tmp_seed = *seed;
 				tmp_playerInvincibility = *playerInvincibility;
 				tmp_helperInvincibility = *helperInvincibility;
+
+				tmp_seed = *seed;
 			}
 
 			(*show).seed = *seed;
