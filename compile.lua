@@ -463,6 +463,8 @@ end
 set_randi(0x020c42a0, "Impact Star")
 set_randi(0x020c5e4c, "Invincibility Star")
 set_randi(0x0210b578, "Losing Ability")
+set_randi(0x0216fc84, "Defeated Enemy Effect")
+set_randi(0x020947d0, "Food Star")
 
 set_randi(0x021a743c, "Whale Rolls or Splashes")
 set_randi(0x021aa818, "Windows Attacks First")
