@@ -444,15 +444,30 @@ function seed_advances()
 	writedword(addr, jump(addr, update_on_setting_destruction_timer))
 	d2()
 
-	--randi_with_update
-	local set_randi = function(addr)
-		if_eq(addr, call(addr, randi_func))
-		writedword(addr,  call(addr, randi_with_update))
-		d2()
-	end
-
-	set_randi(0x20c42a0)	--星
-
 end
 
-seed_advances()
+function set_randi(addr, title)
+	print("["..title.."]")
+
+	local randi_func = 0x0200B8A4
+	local randi_with_update = 0x023FE580
+
+	if_eq(addr, call(addr, randi_func))
+	writedword(addr,  call(addr, randi_with_update))
+	d2()
+
+	print("")
+end
+
+
+set_randi(0x020c42a0, "Impact Star")
+set_randi(0x020c5e4c, "Invincibility Star")
+set_randi(0x0210b578, "Losing Ability")
+
+set_randi(0x021a743c, "Whale Rolls or Splashes")
+set_randi(0x021aa818, "Windows Attacks First")
+set_randi(0x021a4d50, "Windows Copy Essences")
+set_randi(0x021a89bc, "Windows Moves")
+
+set_randi(0x021a40fc, "Lobster Walks or Dashes")
+set_randi(0x021a41dc, "Lobster Jumps or Glides")
