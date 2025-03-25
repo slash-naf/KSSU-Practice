@@ -447,29 +447,33 @@ function seed_advances()
 end
 
 function set_randi(addr, title)
-	print("["..title.."]")
+	local s = function()
+		print("["..title.."]")
 
-	local randi_func = 0x0200B8A4
-	local randi_with_update = 0x023FE580
+		local randi_func = 0x0200B8A4
+		local randi_with_update = 0x023FE580
+	
+		if_eq(addr, call(addr, randi_func))
+		writedword(addr,  call(addr, randi_with_update))
+		d2()
+	
+		print("")
+	end
 
-	if_eq(addr, call(addr, randi_func))
-	writedword(addr,  call(addr, randi_with_update))
-	d2()
+	s(0x020c42a0, "Impact Star")
+	s(0x020c5e4c, "Invincibility Star")
+	s(0x0210b578, "Losing Ability")
+	s(0x0216fc84, "Defeated Enemy Effect")
+	s(0x020947d0, "Food Star")
 
-	print("")
+	s(0x021a743c, "Whale Rolls or Splashes")
+	s(0x021aa818, "Windows Attacks First")
+	s(0x021a4d50, "Windows Copy Essences")
+	s(0x021a89bc, "Windows Moves")
+
+	s(0x021a40fc, "Lobster Walks or Dashes")
+	s(0x021a41dc, "Lobster Jumps or Glides")
+
 end
 
-
-set_randi(0x020c42a0, "Impact Star")
-set_randi(0x020c5e4c, "Invincibility Star")
-set_randi(0x0210b578, "Losing Ability")
-set_randi(0x0216fc84, "Defeated Enemy Effect")
-set_randi(0x020947d0, "Food Star")
-
-set_randi(0x021a743c, "Whale Rolls or Splashes")
-set_randi(0x021aa818, "Windows Attacks First")
-set_randi(0x021a4d50, "Windows Copy Essences")
-set_randi(0x021a89bc, "Windows Moves")
-
-set_randi(0x021a40fc, "Lobster Walks or Dashes")
-set_randi(0x021a41dc, "Lobster Jumps or Glides")
+QSQL()

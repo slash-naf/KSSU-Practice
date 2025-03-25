@@ -164,13 +164,7 @@ const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0
 int* const monitor_RNG = (int*)0x023FE580;
 short* const seed_advances = (short*)0x023FE57C;
 short* const narrowed_seed_advances = (short*)0x023FE57E;
-typedef struct{
-	int timer;
-	int seed_advances;
-	int narrowed_seed_advances;
-	int seed;
-}Show;
-Show* const show = (Show*)0x02090DD8;	//自前で作った4桁の数値4つ
+int* const show = (int*)0x02090DD8;	//自前で作った4桁の数値4つ
 
 int f(int pressed, int r1){
 	//処理を割り込ませるために潰した処理を行うのとレジスタの値の取得
@@ -210,9 +204,11 @@ int f(int pressed, int r1){
 				tmp_seed = *seed;
 			}
 
-			(*show).seed = *seed;
-			(*show).seed_advances = *seed_advances;
-			(*show).narrowed_seed_advances = *narrowed_seed_advances;
+			if(*monitor_RNG != 0){
+				show[1] = *seed_advances;
+				show[2] = *narrowed_seed_advances;
+				show[3] = *seed;
+			}
 		}
 	}else{
 		//座標が0ではなくなったら
@@ -362,7 +358,19 @@ int f(int pressed, int r1){
 		}
 		break;
 	default:
-		(*show).timer = *timer;	//表示タイムの更新
+		if(*timer >= TIMER_RESET){	//QLなら
+			show[0] = 0;
+		}else{
+			if(*timer > show[0]){
+				//区間タイム
+				if(*monitor_RNG == 0){
+					show[3] = show[2];
+					show[2] = show[1];
+					show[1] = *timer - show[0];
+				}
+				show[0] = *timer;	//表示タイムの更新
+			}
+		}
 	}
 
 
