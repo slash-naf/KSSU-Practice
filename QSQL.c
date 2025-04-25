@@ -270,8 +270,14 @@ int f(int pressed, int r1){
 				}else{
 					sav_pos = tmp_pos;
 				}
+
 				//フロア遷移時の状態
-				sav_playerMode = tmp_playerMode;
+				if(sav_gameStates == 0x00040601){
+					//大王5-1でQSすると次のフロアでソフトロックするのの修正
+					sav_playerMode = 0;
+				}else{
+					sav_playerMode = tmp_playerMode;
+				}
 
 
 
