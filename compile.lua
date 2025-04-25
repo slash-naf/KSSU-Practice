@@ -307,12 +307,12 @@ function QSQL()
 		local cond = codes[i] - (codes[i] % 0x10000000)
 
 		if n == 0x092D4000 then	--stmdb sp!, {lr}
-			print(string.format("%04X\t", (i-1)*4) .. string.format("%08X", codes[i]))
+			--print(string.format("%04X\t", (i-1)*4) .. string.format("%08X", codes[i]))
 
 			codes[i] = 0x092D5FFE + cond	--stmdb sp!, {r1-r12, lr}	レジスタの退避
 
 		elseif n == 0x08BD8000 then	--ldmia sp!, {pc}	レジスタの復元とリターン
-			print(string.format("%04X\t", (i-1)*4) .. string.format("%08X", codes[i]))
+			--print(string.format("%04X\t", (i-1)*4) .. string.format("%08X", codes[i]))
 
 			codes[i] = jump(copyAddr + (i-1) * 4, 0x020017C8) - 0xE0000000 + cond	--元のコードへのジャンプ
 

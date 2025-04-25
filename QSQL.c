@@ -370,9 +370,14 @@ int f(int pressed, int r1){
 			if(*timer > show[0]){
 				//区間タイム
 				if(*monitor_RNG == 0){
-					show[3] = show[2];
-					show[2] = show[1];
-					show[1] = *timer - show[0];
+					int n = *timer - show[0];
+					if(n > 1){
+						show[3] = show[2];
+						show[2] = show[1];
+						show[1] = n;
+					}else{
+						show[1] += n;
+					}
 				}
 				show[0] = *timer;	//表示タイムの更新
 			}
