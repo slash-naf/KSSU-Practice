@@ -6,12 +6,12 @@ function write(addr, n)
 		error("byte lengths error; write("..addr..", "..n..")")
 	end
 
-	addr = bit.band(addr - offset, 0xFFFFFFFF)
+	addr = bit.band(addr, 0xF0000000) + bit.band(bit.band(addr, 0xFFFFFFF) - offset, 0xFFFFFFF)
 	print(string.format("%08X ", addr)..string.format("%08X", n))
 end
 --配列で一括書き込み
 function patch(addr, a)
-	addr = bit.band(addr - offset, 0xFFFFFFFF)
+	addr = bit.band(bit.band(addr, 0xFFFFFFF) - offset, 0xFFFFFFF)
 	local size = #a * 4
 	print("E"..string.format("%07X ", addr)..string.format("%08X", size))
 
@@ -35,7 +35,7 @@ function copy(n_addr, d_addr, m)
 		if m == nil then
 			m = ""
 		else
-			m = "\nD4000000 "..string.format("%08X", bit.band(m, 0xFFFFFFFF))
+			m = "\r\nD4000000 "..string.format("%08X", bit.band(m, 0xFFFFFFFF))
 		end
 
 		if len == 0 then
@@ -187,6 +187,7 @@ timer = 0x02041D60	--タイマー
 music = 0x020485C4	--曲。0xFFFFFC19がミュートだけどフロア遷移時に入れても曲が最初からになるだけ
 
 gameStates=  0x0205B244
+gameSituationAndMode = 0x1205B244
 gameSituation = 0x2205B244
 gameMode  = 0x2205B245
 stage     = 0x2205B246
@@ -236,10 +237,23 @@ helperInvincibility = 0x120BADE8	--2Pのむてきキャンディの残り時間�
 
 menuPageIdx =0x221983CA	--ポーズのメニューのページ番号
 
+function charAt(addr, idx)
+	return addr % 0x10000000 + 0x20000000 + idx
+end
+function shortAt(addr, idx)
+	return addr % 0x10000000 + 0x10000000 + idx
+end
 
 --変数
 z = {
 	show_number = 0,
+
+	sav_gameStates = 0,
+
+	sav_playerStates = 0,
+	sav_helperStates = 0,
+
+	sav_mww_abilities = 0,
 
 	tmp_pos = 0,
 	sav_pos = 0,
@@ -252,11 +266,20 @@ z = {
 	tmp_helperInvincibility = 1,
 	sav_helperInvincibility = 1,
 
+	conf_musicReset = 1,
+
+	sav_playerRiding = 2,
+	sav_helperRode = 2,
+
+	sav_mww_selected_abilities = 2,
+
+	sav_arena_idx = 2,
+
 }
 local i = 0
 for key, val in pairs(z) do
 	local t = {4, 2, 1}
-	local n = t[z[key] + 1]
+	local n = t[val + 1]
 	z[key] = val * 0x10000000 + 0x02090DC4 + i
 	i = i + n
 end
@@ -294,12 +317,114 @@ eq(getPos, 0)
 
 d2()
 
+--ポーズ中にXでジェットをセーブ
+ne(pressed_buttons, 0, Button.X)
+eq(gameSituation, GameSituation.PAUSE)
+	write(charAt(z.sav_playerStates, 3), Ability.JET)
+d2()
 
+--ポーズ中にL/RでQS
+ne(pressed_buttons, 0, Button.L + Button.R)
+eq(gameSituation, GameSituation.PAUSE)
+	--フロア
+	copy(gameStates, z.sav_gameStates, -0xA)
+
+	--銀河
+	copy(mww_abilities, z.sav_mww_abilities)
+	copy(mww_selectedAbility, z.sav_mww_selected_abilities)
+
+	--格闘王系で何戦目か
+	copy(arena_idx, z.sav_arena_idx)
+
+	--能力
+	copy(playerStates, z.sav_playerStates)
+	copy(playerRiding, z.sav_playerRiding)
+	copy(helperStates, z.sav_helperStates)
+	copy(helperRode, z.sav_helperRode)
+
+	--むてきキャンディ
+	copy(z.tmp_playerInvincibility, z.sav_playerInvincibility)
+	copy(z.tmp_helperInvincibility, z.sav_helperInvincibility)
+
+	--座標
+	copy(z.tmp_pos, z.sav_pos)
+
+	--状態
+	copy(z.tmp_playerMode, z.sav_playerMode)
+
+	--曲の設定。Lなら通常、Rなら曲リセット
+	copy(pressed_buttons, z.conf_musicReset)
+
+	--通常状態からウィリーライダーをQLするときの対策
+	eq(z.sav_helperStates, 0x08080101)
+		write(z.sav_helperStates, 0x08080201)
+
+d2()
+
+--通常時ににLでQL
 ne(pressed_buttons, 0, Button.L)
 eq(gameSituation, GameSituation.PLAY)
-	write(gameSituation, GameSituation.FLOOR_LOAD)
+	--チェックポイント
+	write(gameSituation, 0x3F)
+
+	--タイマーリセット
+	write(timer, 0x50000)
+
+	--HPと残機を最大に
+	write(lives, 99)
+	copy(playerMaxHP, playerHP)
+	copy(helperMaxHP, helperHP)
+
+	--RでQSしてたら曲リセット
+	ne(z.conf_musicReset, 0, Button.R)
+		write(music, Music.Music_MUTE)
+d2()
+eq(gameSituation, 0x3F)
+	--ヘルマスでなければ能力面のロード
+	ne(gameMode, GameMode.HELPER_TO_HERO)
+		copy(z.sav_playerStates, playerStates)
+		copy(z.sav_playerRiding, playerRiding)
+		copy(z.sav_helperStates, helperStates)
+		copy(z.sav_helperRode, helperRode)
+d2()
+eq(gameSituation, 0x3F)
+	--格闘王系なら
+	gt(gameMode, GameMode.RotK)
+	ne(gameMode, GameMode.MKU)
+	lt(gameMode, GameMode.BEGINNERS_ROOM)
+		write(gameSituation, GameSituation.ARENA_PROCEED)
+
+		ne(held_buttons, 0, Button.R)
+			write(gameSituation, GameSituation.ARENA_MATCH)
+			copy(z.sav_arena_idx, arena_idx)
+d2()
+--モード別QL処理
+eq(gameSituationAndMode, GameMode.GCO * 0x100 + 0x3F)
+	print("D5000000 00000000")
+	print("D6000000 "..string.format("%08X", gco_treasures))
+	print("D6000000 "..string.format("%08X", gco_treasures))
+	print("D8000000 "..string.format("%08X", gco_treasuresCnt - 8))
+	print("D8000000 "..string.format("%08X", gco_bosses - 9))
+d2()
+eq(gameSituationAndMode, GameMode.MWW * 0x100 + 0x3F)
+	write(mww_changingSelectedAbility, 1)
+	copy(z.sav_mww_abilities, mww_abilities)
+	copy(z.sav_mww_selected_abilities, mww_selectedAbility)
+	patch(mww_abilitiesByStage, {
+		0,0,0,0,0,0,0,0
+	})
+d2()
+eq(gameSituation, 0x3F)
+	copy(z.sav_gameStates, gameStates)
+	copy(z.sav_playerMode, playerMode)
+	copy(z.sav_pos, setPos)
+
+	eq(gameMode, GameMode.MKU)
+		write(mkuPt, 50)
 d2()
 
 
 
 
+--メタ逆のステージ最初の座標
+--大王5-1でQSすると次のフロアでソフトロックするのの修正
