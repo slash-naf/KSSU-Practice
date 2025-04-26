@@ -476,4 +476,92 @@ function set_randi(addr, title)
 
 end
 
-QSQL()
+function showForDSTT()
+	for i=0x02090D48, 0x02090E3C, 4 do
+		--memory.writedword(i, 0)
+	end
+	memory.writedword(0x02090D48, ret)
+
+
+	--コンパイル
+	os.execute([[clang -target armv5-none-none-eabi -c for_DSTT\show.c -o for_DSTT\show.o & pause]])
+
+
+	local copyAddr = 0x02090D48	--コードのコピー先(残機表示関数)
+
+	local codes = read_ELF(copyAddr, [[for_DSTT\show.o]])
+	if codes == nil then
+		return
+	end
+
+
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+	table.remove(codes, 1)
+
+	table.remove(codes, #codes)
+	table.remove(codes, #codes)
+
+	local draw = 0x0200FE64;	--描画の関数
+	local number_images_addr = 0x021e2668;
+	codes[#codes + 1] = number_images_addr
+
+	local numbers_loop = 0
+	local divide_loop = 0
+	local digit_loop = 0
+	local dd = 0
+
+	for i=1, #codes do
+		--if codes[i] == 0xE59F80C0 then
+		--	print(string.format("%08X", (#codes - i - 2) * 4))
+		--end
+
+		--if codes[i] == 0xE3A050D0 then
+		--	codes[i] = 0xE3A05000 + (#codes - i) * 4	--次の行で使う
+		--	print("show_numbers = "..string.format("%08X", codes[i]))
+		--end
+
+		if codes[i] == 0xE1A00000 then
+			codes[i] = call(copyAddr + (i-1) * 4, draw)
+		end
+
+		if codes[i] == 0xE79F6005 then
+			numbers_loop = i
+		elseif codes[i] == 0x11A01001 then
+			codes[i] = jump(i * 4, numbers_loop * 4) - 0xE0000000 + 0x10000000
+		end
+
+		if codes[i] == 0xE1560007 then
+			divide_loop = i
+		elseif codes[i] == 0x21A00000 then
+			codes[i] = jump(i * 4, divide_loop * 4) - 0xE0000000 + 0x20000000
+		end
+
+		if codes[i] == 0xE0070597 then
+			digit_loop = i
+		elseif codes[i] == 0x11A00000 then
+			codes[i] = jump(i * 4, digit_loop * 4) - 0xE0000000 + 0x10000000
+		end
+
+		if codes[i] == 0xE1560007 then
+			dd = i
+		elseif codes[i] == 0x21A01001 then
+			codes[i] = jump(i * 4, dd * 4) - 0xE0000000 + 0x20000000
+		end
+	end
+
+
+
+	print("show_numbers = "..string.format("%08X", copyAddr + #codes * 4))
+
+
+
+	if_eq(copyAddr, 0xE92D41F0)
+
+	patch(copyAddr, codes)
+
+	d2()
+end
+showForDSTT()
