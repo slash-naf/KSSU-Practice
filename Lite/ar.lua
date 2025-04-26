@@ -26,8 +26,8 @@ function copy(n_addr, d_addr, m)
 	if len ~= bit.rshift(d_addr, 28) then
 		error("different byte lengths")
 	end
-	n_addr = bit.band(n, 0xFFFFFFF)
-	d_addr = bit.band(d, 0xFFFFFFF)
+	n_addr = bit.band(n_addr, 0xFFFFFFF)
+	d_addr = bit.band(d_addr, 0xFFFFFFF)
 
 	if len < 3 then
 		n_addr = string.format("%08X", bit.band(n_addr - offset, 0xFFFFFFFF))
@@ -73,7 +73,7 @@ function cmp(ins, addr, n, mask)
 		ins = string.format("%01X", ins + 4)
 		mask = bit.band(bit.bnot(mask or 0xFFFF), 0xFFFF)
 
-		if t == 1 then
+		if t == 2 then
 			mask = string.format("%02X", mask)
 			n = string.format("%02X", n)
 			if is_even then
@@ -82,7 +82,7 @@ function cmp(ins, addr, n, mask)
 				print(ins..addr.. mask.."FF".. n.."00")
 			end
 		else
-			print( ins..string.format("%07X ", addr)..string.format("%04X", mask)..string.format("%04X", n) )
+			print( ins..addr..string.format("%04X", mask)..string.format("%04X", n) )
 		end
 	end
 end
@@ -118,19 +118,19 @@ Button = {
 	X      = 0x400,
 	Y      = 0x800,
 }
-GameState = {
-	STATE_PLAY         = 0,
-	STATE_FLOOR_LOAD   = 1,
-	STATE_STAGE_CLEAR  = 2,
-	STATE_GAME_CLEAR   = 3,
-	STATE_DIE          = 4,
-	STATE_SPECIAL      = 5,
-	STATE_ARENA_PROCEED= 5,
-	STATE_MAP          = 6,
-	STATE_ARENA_MATCH  = 6,
-	STATE_SWITCH       = 7,
-	STATE_SHORT_MOVIE  = 9,
-	STATE_PAUSE        = 0xB,
+GameSituation = {
+	PLAY         = 0,
+	FLOOR_LOAD   = 1,
+	STAGE_CLEAR  = 2,
+	GAME_CLEAR   = 3,
+	DIE          = 4,
+	SPECIAL      = 5,
+	ARENA_PROCEED= 5,
+	MAP          = 6,
+	ARENA_MATCH  = 6,
+	SWITCH       = 7,
+	SHORT_MOVIE  = 9,
+	PAUSE        = 0xB,
 }
 GameMode = {
 	SPRING_BREEZE = 0,
@@ -187,7 +187,7 @@ timer = 0x02041D60	--タイマー
 music = 0x020485C4	--曲。0xFFFFFC19がミュートだけどフロア遷移時に入れても曲が最初からになるだけ
 
 gameStates=  0x0205B244
-gameState = 0x2205B244
+gameSituation = 0x2205B244
 gameMode  = 0x2205B245
 stage     = 0x2205B246
 room      = 0x2205B247
@@ -237,10 +237,68 @@ helperInvincibility = 0x120BADE8	--2Pのむてきキャンディの残り時間�
 menuPageIdx =0x221983CA	--ポーズのメニューのページ番号
 
 
---処理
+--変数
+z = {
+	show_number = 0,
+
+	tmp_pos = 0,
+	sav_pos = 0,
+
+	tmp_playerMode = 0,
+	sav_playerMode = 0,
+
+	tmp_playerInvincibility = 1,
+	sav_playerInvincibility = 1,
+	tmp_helperInvincibility = 1,
+	sav_helperInvincibility = 1,
+
+}
+local i = 0
+for key, val in pairs(z) do
+	local t = {4, 2, 1}
+	local n = t[z[key] + 1]
+	z[key] = val * 0x10000000 + 0x02090DC4 + i
+	i = i + n
+end
 
 --キャンディや1upなどの復活しないアイテムを復活させる
 write(consumedItems, 0)
+
+--ダイナのスイッチがステージに入ってるときはあってステージ選択画面ではおためし部屋があるようにする
+eq(gameMode, GameMode.DYNA_BLADE)
+	write(db_switches, 0)
+
+	gt(gameSituation, 1)
+		write(db_switches, 3)
+
+d2()
+
+--QSQL
+--フロア遷移時の座標とかを保存
+eq(z.tmp_pos, 0)
+	--座標が0ではなくなったら
+	copy(getPos, z.tmp_pos)
+	copy(playerMode, z.tmp_playerMode)
+d2()
+eq(getPos, 0)
+	--座標が0になったら
+	write(z.tmp_pos, 0)
+	copy(playerInvincibility, z.tmp_playerInvincibility)
+	copy(helperInvincibility, z.tmp_helperInvincibility)
+
+	copy(timer, z.show_number)
+
+	gt(timer, 0x40000)	--QL中なら
+		copy(z.sav_playerInvincibility, playerInvincibility)
+		copy(z.sav_helperInvincibility, helperInvincibility)
+
+d2()
+
+
+ne(pressed_buttons, 0, Button.L)
+eq(gameSituation, GameSituation.PLAY)
+	write(gameSituation, GameSituation.FLOOR_LOAD)
+d2()
 
 
 
