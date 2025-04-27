@@ -159,7 +159,7 @@ short conf_musicReset;
 //再配置する
 const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
-#define TIMER_RESET 0x40000
+#define TIMER_RESET 0x40000000
 
 int* const monitor_RNG = (int*)0x023FE580;
 short* const seed_advances = (short*)0x023FE57C;

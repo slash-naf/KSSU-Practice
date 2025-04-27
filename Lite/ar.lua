@@ -29,7 +29,7 @@ function copy(n_addr, d_addr, m)
 	n_addr = bit.band(n_addr, 0xFFFFFFF)
 	d_addr = bit.band(d_addr, 0xFFFFFFF)
 
-	if len < 3 then
+	if len < 2 then
 		n_addr = string.format("%08X", bit.band(n_addr - offset, 0xFFFFFFFF))
 		d_addr = string.format("%08X", bit.band(d_addr - offset, 0xFFFFFFFF))
 		if m == nil then
@@ -46,18 +46,15 @@ function copy(n_addr, d_addr, m)
 			print("DA000000 "..n_addr..m)
 			print("D7000000 "..d_addr)
 			offset = offset + 2
-		elseif len == 2 then
-			print("DA000000 "..n_addr..m)	--Action Replay DSではDBコードにバグあるらしいからDAを使う
-			print("D8000000 "..d_addr)
-			offset = offset + 1
 		end
 	else
+		--Action Replay DSではDBコードにバグあるらしいからFタイプコードを使う
 		if offset ~= n_addr then
 			offset = n_addr;
 			print("D3000000 "..string.format("%08X", n_addr))
 		end
 
-		print("F"..string.format("%07X ", d_addr)..string.format("%08X", len))
+		print("F"..string.format("%07X ", d_addr)..string.format("%08X", 1))
 	end
 end
 --条件分岐
@@ -316,7 +313,9 @@ eq(getPos, 0)
 
 	copy(timer, z.show_number)
 
-	gt(timer, 0x40000)	--QL中なら
+	gt(timer, 0x40000000)	--QL中なら
+		write(timer, 0)
+		write(z.show_number, 0)
 		copy(z.sav_playerInvincibility, playerInvincibility)
 		copy(z.sav_helperInvincibility, helperInvincibility)
 
@@ -334,18 +333,12 @@ eq(gameSituation, GameSituation.PAUSE)
 	--フロア
 	copy(gameStates, z.sav_gameStates, -0xA)
 
-	--銀河
+	--銀河の開放済みコピー
 	copy(mww_abilities, z.sav_mww_abilities)
-	copy(mww_selectedAbility, z.sav_mww_selected_abilities)
-
-	--格闘王系で何戦目か
-	copy(arena_idx, z.sav_arena_idx)
 
 	--能力
 	copy(playerStates, z.sav_playerStates)
-	copy(playerRiding, z.sav_playerRiding)
 	copy(helperStates, z.sav_helperStates)
-	copy(helperRode, z.sav_helperRode)
 
 	--むてきキャンディ
 	copy(z.tmp_playerInvincibility, z.sav_playerInvincibility)
@@ -360,6 +353,18 @@ eq(gameSituation, GameSituation.PAUSE)
 	--曲の設定。Lなら通常、Rなら曲リセット
 	copy(pressed_buttons, z.conf_musicReset)
 
+
+
+	--ウィリーに乗ってるか
+	copy(playerRiding, z.sav_playerRiding)
+	copy(helperRode, z.sav_helperRode)
+
+	--格闘王系で何戦目か
+	copy(arena_idx, z.sav_arena_idx)
+
+	--銀河の選択コピー
+	copy(mww_selectedAbility, z.sav_mww_selected_abilities)
+
 	--通常状態からウィリーライダーをQLするときの対策
 	eq(z.sav_helperStates, 0x08080101)
 		write(z.sav_helperStates, 0x08080201)
@@ -373,7 +378,7 @@ eq(gameSituation, GameSituation.PLAY)
 	write(gameSituation, 0x3F)
 
 	--タイマーリセット
-	write(timer, 0x50000)
+	write(timer, 0x60000000)
 
 	--HPと残機を最大に
 	write(lives, 99)
@@ -387,10 +392,10 @@ d2()
 eq(gameSituation, 0x3F)
 	--ヘルマスでなければ能力面のロード
 	ne(gameMode, GameMode.HELPER_TO_HERO)
-	--	copy(z.sav_playerStates, playerStates)
-	--	copy(z.sav_helperStates, helperStates)
-	--	copy(z.sav_playerRiding, playerRiding)
-	--	copy(z.sav_helperRode, helperRode)
+		copy(z.sav_playerStates, playerStates)
+		copy(z.sav_helperStates, helperStates)
+		copy(z.sav_playerRiding, playerRiding)
+		copy(z.sav_helperRode, helperRode)
 d2()
 eq(gameSituation, 0x3F)
 	--格闘王系なら
@@ -399,7 +404,7 @@ eq(gameSituation, 0x3F)
 	lt(gameMode, GameMode.BEGINNERS_ROOM)
 		write(gameSituation, GameSituation.ARENA_PROCEED)
 
-		ne(held_buttons, 0, Button.R)
+		eq(held_buttons, 0, Button.R)	--Rを押しながらじゃなければ
 			write(gameSituation, GameSituation.ARENA_MATCH)
 			copy(z.sav_arena_idx, arena_idx)
 d2()
