@@ -245,7 +245,7 @@ end
 z = {
 	show_number = 0x02090DC4,
 
-	sav_gameStates = 0,
+	sav_gameStates = 0x02090DC8,
 
 	sav_playerStates = 0,
 	sav_helperStates = 0,
@@ -273,7 +273,7 @@ z = {
 	sav_arena_idx = 2,
 
 }
-local var_addr = 0x02090DC8
+local var_addr = 0x02090DCC
 for i = 0, 2 do
 	local t = {4, 2, 1}
 	for key, val in pairs(z) do
@@ -374,6 +374,7 @@ d2()
 --通常時ににLでQL
 ne(pressed_buttons, 0, Button.L)
 eq(gameSituation, GameSituation.PLAY)
+eq(charAt(z.sav_gameStates, 0), 1)	--QS済みなら
 	--チェックポイント
 	write(gameSituation, 0x3F)
 
