@@ -36,6 +36,7 @@ Monitor RNG と併用できない
 #### 変数
 
 |Address|Size|Name|
+|--:|--:|:--|
 |02090DC4|4|show_number|
 |02090DC8|4|sav_gameStates|
 |02090DCC|4|sav_helperStates|
