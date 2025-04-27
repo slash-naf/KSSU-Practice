@@ -96,8 +96,12 @@ function ne(addr, n, mask)
 	cmp(6, addr, n, mask)
 end
 function d2()
+	offset = 0
+	print("D2000000 00000000")
+end
+function d3_0()
 	offset = 0;
-	print("D2000000 00000000");
+	print("D3000000 00000000");
 end
 
 --定数
@@ -388,6 +392,7 @@ eq(charAt(z.sav_gameStates, 0), 1)	--QS済みなら
 
 	--RでQSしてたら曲リセット
 	ne(z.conf_musicReset, 0, Button.R)
+		d3_0()
 		write(music, Music.Music_MUTE)
 d2()
 eq(gameSituation, 0x3F)
