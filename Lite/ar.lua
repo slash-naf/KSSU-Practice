@@ -446,3 +446,21 @@ end
 eq(z.sav_gameStates, 0x00040601)
 	write(z.sav_playerMode, 0)
 d2()
+
+
+
+
+
+print()
+print("[R + SELECT to Die]")
+
+--R押しながらSELECTで死亡
+
+print("94000130 FEFF0000")	--R押していれば
+ne(pressed_buttons, 0, Button.SELECT)	--SELECTを押したのでなければ
+	write(gameSituation, GameSituation.DIE)
+d2()
+
+
+
+
