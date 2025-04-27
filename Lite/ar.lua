@@ -436,4 +436,13 @@ d2()
 
 
 --メタ逆のステージ最初の座標
+RoMK_positions = {0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
+for i = 1, 6 do
+	eq(z.sav_gameStates, 0x00000401 + i * 0x00010000)
+		write(z.sav_pos, RoMK_positions[i])
+	d2()
+end
 --大王5-1でQSすると次のフロアでソフトロックするのの修正
+eq(z.sav_gameStates, 0x00040601)
+	write(z.sav_playerMode, 0)
+d2()
