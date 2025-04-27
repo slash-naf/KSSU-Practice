@@ -246,7 +246,7 @@ end
 
 --変数
 z = {
-	show_number = 0,
+	show_number = 0x02090DC4,
 
 	sav_gameStates = 0,
 
@@ -276,12 +276,17 @@ z = {
 	sav_arena_idx = 2,
 
 }
-local i = 0
-for key, val in pairs(z) do
+local var_addr = 0x02090DC8
+for i = 0, 2 do
 	local t = {4, 2, 1}
-	local n = t[val + 1]
-	z[key] = val * 0x10000000 + 0x02090DC4 + i
-	i = i + n
+	for key, val in pairs(z) do
+		if val == i then
+			z[key] = var_addr + val * 0x10000000
+			var_addr = var_addr + t[i+1]
+
+			print(string.format("%08X", z[key]).."\t"..key)
+		end
+	end
 end
 
 --キャンディや1upなどの復活しないアイテムを復活させる
@@ -382,10 +387,10 @@ d2()
 eq(gameSituation, 0x3F)
 	--ヘルマスでなければ能力面のロード
 	ne(gameMode, GameMode.HELPER_TO_HERO)
-		copy(z.sav_playerStates, playerStates)
-		copy(z.sav_playerRiding, playerRiding)
-		copy(z.sav_helperStates, helperStates)
-		copy(z.sav_helperRode, helperRode)
+	--	copy(z.sav_playerStates, playerStates)
+	--	copy(z.sav_helperStates, helperStates)
+	--	copy(z.sav_playerRiding, playerRiding)
+	--	copy(z.sav_helperRode, helperRode)
 d2()
 eq(gameSituation, 0x3F)
 	--格闘王系なら
@@ -403,16 +408,14 @@ eq(gameSituationAndMode, GameMode.GCO * 0x100 + 0x3F)
 	print("D5000000 00000000")
 	print("D6000000 "..string.format("%08X", gco_treasures))
 	print("D6000000 "..string.format("%08X", gco_treasures))
-	print("D8000000 "..string.format("%08X", gco_treasuresCnt - 8))
-	print("D8000000 "..string.format("%08X", gco_bosses - 9))
+	print("D8000000 "..string.format("%08X", gco_treasuresCnt - 0x20000008))
+	print("D8000000 "..string.format("%08X", gco_bosses - 0x20000009))
 d2()
 eq(gameSituationAndMode, GameMode.MWW * 0x100 + 0x3F)
 	write(mww_changingSelectedAbility, 1)
+	patch(mww_abilitiesByStage, {0,0})
 	copy(z.sav_mww_abilities, mww_abilities)
 	copy(z.sav_mww_selected_abilities, mww_selectedAbility)
-	patch(mww_abilitiesByStage, {
-		0,0,0,0,0,0,0,0
-	})
 d2()
 eq(gameSituation, 0x3F)
 	copy(z.sav_gameStates, gameStates)
