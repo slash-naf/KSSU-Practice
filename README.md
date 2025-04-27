@@ -33,29 +33,6 @@ TWiLight Menu++の場合は"sd:/_nds/TWiLightMenu/extras/usrcheat.dat"に配置
 Monitor RNG と併用できない  
 フロアごとの区間タイムが表示されない
 
-#### 変数
-
-|Address|Size|Name|
-|--:|--:|:--|
-|02090DC4|4|show_number|
-|02090DC8|4|sav_gameStates|
-|02090DCC|4|sav_helperStates|
-|02090DD0|4|sav_playerMode|
-|02090DD4|4|sav_mww_abilities|
-|02090DD8|4|tmp_pos|
-|02090DDC|4|sav_playerStates|
-|02090DE0|4|sav_pos|
-|02090DE4|4|tmp_playerMode|
-|02090DE8|2|tmp_helperInvincibility|
-|02090DEA|2|conf_musicReset|
-|02090DEC|2|tmp_playerInvincibility|
-|02090DEE|2|sav_playerInvincibility|
-|02090DF0|2|sav_helperInvincibility|
-|02090DF2|1|sav_helperRode|
-|02090DF3|1|sav_mww_selected_abilities|
-|02090DF4|1|sav_arena_idx|
-|02090DF5|1|sav_playerRiding|
-
 ### QSQL
 
 #### 操作方法
@@ -75,30 +52,6 @@ QL時にはタイマーのリセット、HP全回復、残機99、メタナイ�
 格闘王系のモードではボスがセーブされ、QLすると1戦目になってそのボスがロードされる
 
 下画面に4桁の数値が4つ表示され、フロア遷移時のタイムを一番左に、区間タイムを右3つに表示する
-
-#### 変数
-
-|Address|Size|Name|
-|--:|--:|:--|
-|023FE500|1|sav_mww_selectedAbility|
-|023FE501|1|sav_arena_boss|
-|023FE502|1|sav_playerRiding|
-|023FE503|1|sav_helperRode|
-|023FE504|2|sav_playerInvincibility|
-|023FE506|2|sav_helperInvincibility|
-|023FE508|2|tmp_playerInvincibility|
-|023FE50A|2|tmp_helperInvincibility|
-|023FE50C|2|conf_musicReset|
-|023FE510|4|tmp_pos|
-|023FE514|4|sav_seed|
-|023FE518|4|tmp_seed|
-|023FE51C|4|tmp_playerMode|
-|023FE520|4|sav_playerStates|
-|023FE524|4|sav_gameStates|
-|023FE528|4|sav_mww_abilities|
-|023FE52C|4|sav_helperStates|
-|023FE530|4|sav_pos|
-|023FE534|4|sav_playerMode|
 
 ### R + START to Pause Anytime
 
@@ -123,6 +76,55 @@ QSQLと併用
 QLでリセット
 
 以降はこれと併用で、特定の乱数が判定されたら情報を更新する
+
+## 変数のメモリ配置
+
+### QSQL Lite
+
+|Address|Size|Name|
+|--:|--:|:--|
+|02090DC4|4|show_number|
+|02090DC8|4|sav_gameStates|
+|02090DCC|4|sav_helperStates|
+|02090DD0|4|sav_playerMode|
+|02090DD4|4|sav_mww_abilities|
+|02090DD8|4|tmp_pos|
+|02090DDC|4|sav_playerStates|
+|02090DE0|4|sav_pos|
+|02090DE4|4|tmp_playerMode|
+|02090DE8|2|tmp_helperInvincibility|
+|02090DEA|2|conf_musicReset|
+|02090DEC|2|tmp_playerInvincibility|
+|02090DEE|2|sav_playerInvincibility|
+|02090DF0|2|sav_helperInvincibility|
+|02090DF2|1|sav_helperRode|
+|02090DF3|1|sav_mww_selected_abilities|
+|02090DF4|1|sav_arena_idx|
+|02090DF5|1|sav_playerRiding|
+
+### QSQL
+
+|Address|Size|Name|
+|--:|--:|:--|
+|023FE500|1|sav_mww_selectedAbility|
+|023FE501|1|sav_arena_boss|
+|023FE502|1|sav_playerRiding|
+|023FE503|1|sav_helperRode|
+|023FE504|2|sav_playerInvincibility|
+|023FE506|2|sav_helperInvincibility|
+|023FE508|2|tmp_playerInvincibility|
+|023FE50A|2|tmp_helperInvincibility|
+|023FE50C|2|conf_musicReset|
+|023FE510|4|tmp_pos|
+|023FE514|4|sav_seed|
+|023FE518|4|tmp_seed|
+|023FE51C|4|tmp_playerMode|
+|023FE520|4|sav_playerStates|
+|023FE524|4|sav_gameStates|
+|023FE528|4|sav_mww_abilities|
+|023FE52C|4|sav_helperStates|
+|023FE530|4|sav_pos|
+|023FE534|4|sav_playerMode|
 
 ## どうやって作ったか
 
