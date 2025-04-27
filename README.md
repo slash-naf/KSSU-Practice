@@ -1,4 +1,4 @@
-# 星のカービィ ウルトラスーパーデラックス 練習用チートv2.3.1
+# 星のカービィ ウルトラスーパーデラックス 練習用チートv2.4
 
 ## 導入方法
 
@@ -9,7 +9,7 @@ NDSForwarderを使っている場合は"usrcheat.dat"を"sd:/_nds/ntr-forwarder/
 ゲームを起動するときにYを押し続けるとメニューが表示される  
 Xを押すと、チートが表示され、Aで選択、Xで保存して戻る  
 STARTで保存して開始  
-デフォルトで全て有効になってるからそれで良ければメニュー開く必要は無い
+デフォルトでは、 QSQL Lite と R + START to Pause Anytime と R + SELECT to Die と Freeze RoMK Timer のみ有効
 
 TWiLight Menu++の場合は"sd:/_nds/TWiLightMenu/extras/usrcheat.dat"に配置
 
@@ -19,13 +19,41 @@ TWiLight Menu++の場合は"sd:/_nds/TWiLightMenu/extras/usrcheat.dat"に配置
 
 銀河にねがいをのマルク戦では一度死んでからQSしたほうがいい
 
-日本語版でしか使えない
+日本版のROMでしか使えない
 
 自分の環境はNew3DSのnds-bootstrapのv2.2.2でだいたい問題なく機能してるけど、他の環境だと違うかもしれない  
 古いバージョンのnds-bootstrapだとEタイプコードが機能しないから、QSQLなどが機能しない  
-プログラムと変数を配置してるRAMがDSTTでも使われてるらしい。とはいえ他にいい場所があまりない。RAMにプログラムを乗せず、機能を減らしてDSTTで使えるようにしたものは作れると思う
+プログラムと変数を配置してるRAMがマジコンでも使われてるらしいから、たぶんQSQLは使えなくてQSQL Liteは使える
 
 ## チート一覧
+
+### QSQL Lite
+
+ほぼ次のQSQLと同じ  
+Monitor RNG と併用できない  
+フロアごとの区間タイムが表示されない
+
+#### 変数
+
+|Address|Size|Name|
+|02090DC4|4|show_number|
+|02090DC8|4|sav_gameStates|
+|02090DCC|4|sav_helperStates|
+|02090DD0|4|sav_playerMode|
+|02090DD4|4|sav_mww_abilities|
+|02090DD8|4|tmp_pos|
+|02090DDC|4|sav_playerStates|
+|02090DE0|4|sav_pos|
+|02090DE4|4|tmp_playerMode|
+|02090DE8|2|tmp_helperInvincibility|
+|02090DEA|2|conf_musicReset|
+|02090DEC|2|tmp_playerInvincibility|
+|02090DEE|2|sav_playerInvincibility|
+|02090DF0|2|sav_helperInvincibility|
+|02090DF2|1|sav_helperRode|
+|02090DF3|1|sav_mww_selected_abilities|
+|02090DF4|1|sav_arena_idx|
+|02090DF5|1|sav_playerRiding|
 
 ### QSQL
 
@@ -46,6 +74,30 @@ QL時にはタイマーのリセット、HP全回復、残機99、メタナイ�
 格闘王系のモードではボスがセーブされ、QLすると1戦目になってそのボスがロードされる
 
 下画面に4桁の数値が4つ表示され、フロア遷移時のタイムを一番左に、区間タイムを右3つに表示する
+
+#### 変数
+
+|Address|Size|Name|
+|--:|--:|:--|
+|023FE500|1|sav_mww_selectedAbility|
+|023FE501|1|sav_arena_boss|
+|023FE502|1|sav_playerRiding|
+|023FE503|1|sav_helperRode|
+|023FE504|2|sav_playerInvincibility|
+|023FE506|2|sav_helperInvincibility|
+|023FE508|2|tmp_playerInvincibility|
+|023FE50A|2|tmp_helperInvincibility|
+|023FE50C|2|conf_musicReset|
+|023FE510|4|tmp_pos|
+|023FE514|4|sav_seed|
+|023FE518|4|tmp_seed|
+|023FE51C|4|tmp_playerMode|
+|023FE520|4|sav_playerStates|
+|023FE524|4|sav_gameStates|
+|023FE528|4|sav_mww_abilities|
+|023FE52C|4|sav_helperStates|
+|023FE530|4|sav_pos|
+|023FE534|4|sav_playerMode|
 
 ### R + START to Pause Anytime
 
@@ -71,30 +123,6 @@ QLでリセット
 
 以降はこれと併用で、特定の乱数が判定されたら情報を更新する
 
-## 変数のメモリ配置
-
-|アドレス|サイズ|変数名|
-|--:|--:|:--|
-|023fe500|1|sav_mww_selectedAbility|
-|023fe501|1|sav_arena_boss|
-|023fe502|1|sav_playerRiding|
-|023fe503|1|sav_helperRode|
-|023fe504|2|sav_playerInvincibility|
-|023fe506|2|sav_helperInvincibility|
-|023fe508|2|tmp_playerInvincibility|
-|023fe50a|2|tmp_helperInvincibility|
-|023fe50c|2|conf_musicReset|
-|023fe510|4|tmp_pos|
-|023fe514|4|sav_seed|
-|023fe518|4|tmp_seed|
-|023fe51c|4|tmp_playerMode|
-|023fe520|4|sav_playerStates|
-|023fe524|4|sav_gameStates|
-|023fe528|4|sav_mww_abilities|
-|023fe52c|4|sav_helperStates|
-|023fe530|4|sav_pos|
-|023fe534|4|sav_playerMode|
-
 ## どうやって作ったか
 
 C言語で書いたコードをdesmumeでcompile.luaを使って、ARMv5向けのコンパイルコマンドを実行し、出来たELFファイルを組み込めるように変換し、そのコードを書き込むためのActionReplayコードを作る  
@@ -106,3 +134,5 @@ DSATM(DS Auto Trainer Maker)っていう、ROMにチートを埋め込めるア�
 
 そのコードはボタン入力処理の所(020017C0-020017CC)から呼び出した  
 毎フレーム実行されるしレジスタにボタン入力情報が入った状態だから都合がいい
+
+QSQL Lite は純粋にActionReplayコードで動いている
