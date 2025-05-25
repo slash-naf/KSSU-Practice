@@ -564,4 +564,6 @@ function showForDSTT()
 
 	d2()
 end
-showForDSTT()
+
+
+QSQL()

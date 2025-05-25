@@ -70,6 +70,12 @@ enum Ability{
 	COOK    = 0x18,
 	SLEEP   = 0x19,
 };
+enum Form{
+	Form_NORMAL = 1,
+	Form_INHALE = 2,	//ほおばっている状態
+	Form_HOVER  = 3,	//ホバーヒートや羽ばたきは1のまま
+	Form_SWIM   = 4,
+};
 
 int* const seed  = (int*)0x02041D3C;	//乱数
 int* const timer = (int*)0x02041D60;	//タイマー
@@ -117,7 +123,12 @@ int* const displayMode = (int*)0x0209ECC4;	//スコア・ゴールドの所に�
 
 int* const  playerStates = (int*)0x020BA318;	//1Pの能力・状態
 char* const playerAbility = (char*)0x020BA31B;	//1Pの能力
+char* const playerForm = (char*)0x020BA31C;	//1Pのホバリングかほおばってるかとか
 char* const playerRiding =(char*)0x020BA31D;	//ウィリーライダーなら2
+
+int* const playerInhale1 = (int*)0x020BA5B0;
+int* const playerInhale2 = (int*)0x020BA5B4;
+
 short* const playerInvincibility = (short*)0x020BA5CC;	//1Pのむてきキャンディ/1Pと2pのメタクイックの残り時間
 
 int* const  helperStates = (int*)0x020BAB34;	//2Pの能力・状態
@@ -155,6 +166,9 @@ short sav_helperInvincibility;
 char sav_arena_boss;
 
 short conf_musicReset;
+
+int sav_inhale1;
+int sav_inhale2;
 
 //再配置する
 const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
@@ -218,6 +232,23 @@ int f(int pressed, int r1){
 		}
 	}
 
+
+	//ほおばりのロード
+	if(sav_inhale1 != 0){
+		*playerInhale1 = sav_inhale1;
+		*playerInhale2 = sav_inhale2;
+		*playerInvincibility = 1;
+	}
+
+	//ダイナのスイッチがステージに入ってるときはあってステージ選択画面ではおためし部屋があるようにする
+	if(*gameMode == DYNA_BLADE){
+		*db_switches = 0;
+		if(*gameState > 1){
+			*db_switches = 3;
+		}
+	}
+
+
 	//場面別の処理
 	switch(*gameState){
 	case STATE_PAUSE:
@@ -225,6 +256,11 @@ int f(int pressed, int r1){
 		if(X & pressed){
 			((char*)(&sav_playerStates))[3] = JET;
 		}
+		//ポーズ時にYで座標をセーブ
+		if(Y & pressed){
+			sav_pos = *getPos;
+		}
+
 		//ポーズ時にL/RでQS
 		if((L | R) & pressed){goto QS;}
 		break;
@@ -279,7 +315,12 @@ int f(int pressed, int r1){
 					sav_playerMode = tmp_playerMode;
 				}
 
-
+				//ほおばりのセーブ
+				sav_inhale1 = 0;
+				if(*playerForm == Form_INHALE){
+					sav_inhale1 = *playerInhale1;
+					sav_inhale2 = *playerInhale2;
+				}
 
 				//ポーズからのQSの場合はQLしない
 				if(*gameState == STATE_PAUSE){
@@ -303,10 +344,9 @@ int f(int pressed, int r1){
 			}
 
 			//ゲームモード別の処理
-			int mode = (sav_gameStates >> 8) & 0xFF;
 
 			//能力
-			if(mode != HELPER_TO_HERO){
+			if(*gameMode != HELPER_TO_HERO){
 				*playerStates = sav_playerStates;
 				*playerRiding = sav_playerRiding;
 				
@@ -314,7 +354,7 @@ int f(int pressed, int r1){
 				*helperRode   = sav_helperRode;
 			}
 
-			switch(mode){
+			switch(*gameMode){
 			case THE_ARENA:
 			case THE_TRUE_ARENA:
 			case HELPER_TO_HERO:
@@ -334,10 +374,7 @@ int f(int pressed, int r1){
 				*setPos = sav_pos;
 				*playerMode = sav_playerMode;
 
-				switch(mode){
-				case DYNA_BLADE:
-					*db_switches = 0;
-					break;
+				switch(*gameMode){
 				case GCO:
 					//洞窟のお宝とボスをリセット
 					gco_treasures[0] = 0;
@@ -367,10 +404,11 @@ int f(int pressed, int r1){
 		if(*timer >= TIMER_RESET){	//QLなら
 			show[0] = 0;
 		}else{
-			if(*timer > show[0]){
+			int n = *timer - show[0];
+			if(n > 0){
+				show[0] = *timer;	//表示タイムの更新
 				//区間タイム
 				if(*monitor_RNG == 0){
-					int n = *timer - show[0];
 					if(n > 1){
 						show[3] = show[2];
 						show[2] = show[1];
@@ -379,7 +417,6 @@ int f(int pressed, int r1){
 						show[1] += n;
 					}
 				}
-				show[0] = *timer;	//表示タイムの更新
 			}
 		}
 	}
