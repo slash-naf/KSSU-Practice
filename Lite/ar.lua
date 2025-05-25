@@ -331,6 +331,12 @@ eq(gameSituation, GameSituation.PAUSE)
 	write(charAt(z.sav_playerStates, 3), Ability.JET)
 d2()
 
+--ポーズ中にXでジェットをセーブ
+ne(pressed_buttons, 0, Button.Y)
+eq(gameSituation, GameSituation.PAUSE)
+	copy(getPos, z.sav_pos)
+d2()
+
 --ポーズ中にL/RでQS
 ne(pressed_buttons, 0, Button.L + Button.R)
 eq(gameSituation, GameSituation.PAUSE)
