@@ -565,5 +565,49 @@ function showForDSTT()
 	d2()
 end
 
+function mix_view()
+	--コンパイル
+	os.execute([[clang -target armv5-none-none-eabi -c mix_view.c -o mix_view.o -Oz & pause]])
 
-QSQL()
+	local copyAddr = 0x023FE680	--コードのコピー先
+
+	local codes = read_ELF(copyAddr, "mix_view.o")
+	if codes == nil then
+		return
+	end
+
+	copyAddr2 = copyAddr + 0x1C
+
+	codes[7] = jump(copyAddr + 4*6, 0x02111E6C)
+
+	tmpcode = codes[8]
+	codes[8] = codes[9]
+	codes[9] = tmpcode
+
+	for i=1, #codes do
+		if codes[i] == ret then
+			codes[i] = jump(copyAddr + 4*(i-1), 0x02071764)
+		end
+	end
+
+
+	if_eq(copyAddr, 0)
+	patch(copyAddr, codes)
+	d2()
+
+	local addr = 0
+
+	--割り込ませる
+	addr = 0x02111E68
+	if_eq(addr, 0xE2411001)
+	writedword(addr, jump(addr, copyAddr))
+	d2()
+
+	addr = 0x02071734
+	if_eq(addr, 0xEA00000A)
+	writedword(addr, jump(addr, copyAddr2))
+	d2()
+
+end
+
+mix_view()
