@@ -473,5 +473,12 @@ ne(pressed_buttons, 0, Button.SELECT)	--SELECTを押したのでなければ
 d2()
 
 
+--メタ逆でエンディングを流す代わりにそのフロアを再度ロード
+print()
+print("[Prevent RoMK Ending]")
+
+eq(0x021A51C4, 0xE3A00003)
+	print("221A51C4 00000001")
+d2()
 
 
