@@ -285,7 +285,7 @@ function QSQL()
 	os.execute([[clang -target armv5-none-none-eabi -c QSQL.c -o QSQL.o -O3 & pause]])
 
 	local copyAddr = 0x023FE000	--コードのコピー先
-	local bssAddr = 0x023FE500	--変数のアドレス
+	local bssAddr = 0x023FDF00	--変数のアドレス
 
 	local codes = read_ELF(copyAddr, "QSQL.o", bssAddr)
 	if codes == nil then
@@ -610,4 +610,4 @@ function mix_view()
 
 end
 
-mix_view()
+QSQL()

@@ -77,7 +77,8 @@ enum Form{
 	Form_SWIM   = 4,
 };
 
-int* const seed  = (int*)0x02041D3C;	//乱数
+short* const seed      = (short*)0x02041D3C;	//乱数
+short* const seedTimer = (short*)0x02041D3A;	//乱数更新タイマー
 int* const timer = (int*)0x02041D60;	//タイマー
 
 int* const music = (int*)0x020485C4;	//曲。0xFFFFFC19がミュートだけどフロア遷移時に入れても曲が最初からになるだけ
@@ -165,7 +166,7 @@ short sav_helperInvincibility;
 
 char sav_arena_boss;
 
-short conf_musicReset;
+short options;
 
 int sav_inhale1;
 int sav_inhale2;
@@ -174,6 +175,8 @@ int sav_inhale2;
 const int RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
 #define TIMER_RESET 0x40000000
+
+#define LOG 0x02F00000
 
 int* const monitor_RNG = (int*)0x023FE580;
 short* const seed_advances = (short*)0x023FE57C;
@@ -208,14 +211,29 @@ int f(int pressed, int r1){
 
 				*timer = 0;
 
-				if(*monitor_RNG != 0){
-					*seed = sav_seed;
+				//乱数のロード
+				if(options & UP){
+					*seed = ((short*)(&sav_seed))[0];
+					*seedTimer = ((short*)(&sav_seed))[1];
 				}
+
+				//ログにQL情報を書く
+				if(options & (LEFT | RIGHT)){
+					unsigned short* p = (unsigned short*)LOG;
+					unsigned int n = p[0];
+					p[n/2] = *seed | ((*seedTimer & 7) << 12) | 0x8000;
+					n += 2;
+					p[n/2] = *gameMode | (*stage << 4) | (*room << 8);
+					n += 2;
+					p[0] = n;
+				}
+
 			}else{
 				tmp_playerInvincibility = *playerInvincibility;
 				tmp_helperInvincibility = *helperInvincibility;
 
-				tmp_seed = *seed;
+				((short*)(&tmp_seed))[0] = *seed;
+				((short*)(&tmp_seed))[1] = *seedTimer;
 			}
 
 			if(*monitor_RNG != 0){
@@ -325,7 +343,7 @@ int f(int pressed, int r1){
 				//ポーズからのQSの場合はQLしない
 				if(*gameState == STATE_PAUSE){
 					//曲の設定。Lなら通常、Rなら曲リセット
-					conf_musicReset = R & pressed;
+					options = held;
 					break;
 				}
 			}
@@ -339,7 +357,7 @@ int f(int pressed, int r1){
 			*lives = 99;
 
 			//曲のリセット
-			if(conf_musicReset){
+			if(options & R){
 				*music = Music_MUTE;
 			}
 
