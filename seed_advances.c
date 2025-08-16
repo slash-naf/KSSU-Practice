@@ -85,8 +85,8 @@ void update(){
 	*/
 
 	//r4以降だけ破壊
-	asm volatile("ldr r4, [pc, #0x18]");	//seedのアドレス
-	asm volatile("ldr r8, [pc, #0x18]");	//showのアドレス
+	asm volatile("ldr r4, [pc, #0x40]");	//seedのアドレス
+	asm volatile("ldr r8, [pc, #0x40]");	//showのアドレス
 
 	asm volatile("ldrh r5, [pc, #-0x14]");	//seed_advances
 	asm volatile("ldr r7, [r4, #0]");	//seed
@@ -94,5 +94,25 @@ void update(){
 	asm volatile("ldr r4, [r4, #0x24]");	//timer
 
 	asm volatile("stmia r8, {r4-r7}");	//書き込み
+
+	
+
+
+
+	/*
+	if( *(short*)0x023fdf08 & 0x20 ){	//左押しながらQSしたか
+	}
+	*/
+	asm volatile("add r5,r8,#0x36C000");
+	asm volatile("add r5,r5,#0x1100");
+	asm volatile("ldr r5,[r5,#0x30]");
+	asm volatile("tst r5,0x20");
+	asm volatile("movne r8,#0x02F00000");
+	asm volatile("ldrhne r6,[r8]");
+	asm volatile("addne r6,r6,r8");
+	asm volatile("strhne r7,[r6],#2");
+	asm volatile("strhne r4,[r6],#2");
+	asm volatile("strhne r6,[r8]");
+	
 
 }
