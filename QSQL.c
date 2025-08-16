@@ -218,14 +218,12 @@ int f(int pressed, int r1){
 				}
 
 				//ログにQL情報を書く
-				if(options & (LEFT | RIGHT)){
+				if(options & LEFT){
 					unsigned short* p = (unsigned short*)LOG;
-					unsigned int n = p[0];
+					unsigned int n = (*monitor_RNG == 0) ? p[-1] : p[0];	//乱数監視でなければ元に戻す
 					p[n/2] = *seed | ((*seedTimer & 7) << 12) | 0x8000;
-					n += 2;
-					p[n/2] = *gameMode | (*stage << 4) | (*room << 8);
-					n += 2;
-					p[0] = n;
+					p[n/2 + 1] = *gameMode | (*stage << 4) | (*room << 8);
+					p[0] = n + 4;
 				}
 
 			}else{
@@ -234,6 +232,10 @@ int f(int pressed, int r1){
 
 				((short*)(&tmp_seed))[0] = *seed;
 				((short*)(&tmp_seed))[1] = *seedTimer;
+
+				unsigned short* p = (unsigned short*)LOG;
+				p[-2] = p[0];
+
 			}
 
 			if(*monitor_RNG != 0){
@@ -280,16 +282,9 @@ int f(int pressed, int r1){
 		}
 
 		//ポーズ時にL/RでQS
-		if((L | R) & pressed){goto QS;}
-		break;
-	case STATE_PLAY:
-		//通常時にLでQL
-		if(L & pressed){
-			//同じゲームモードで未QSならQSもする
-			if(((*gameStates & 0xFFFF) | STATE_FLOOR_LOAD) != (sav_gameStates & 0xFFFF)){
-			QS:
+		if((L | R) & pressed){
 				//フロア
-				sav_gameStates = (*gameStates & 0xFFFFFF00) | STATE_FLOOR_LOAD;
+				sav_gameStates = *gameStates ^ (STATE_FLOOR_LOAD ^ STATE_PAUSE);
 
 				//銀河
 				sav_mww_abilities = *mww_abilities;
@@ -316,11 +311,9 @@ int f(int pressed, int r1){
 				sav_helperInvincibility = tmp_helperInvincibility;
 
 				//フロア遷移時の座標
-				if( (sav_gameStates & 0xFF00FF00) == 0x00000400){	//メタ逆のステージ最初のフロアなら
-					int chapter = sav_gameStates >> 16;
-					if(chapter < 7){
-						sav_pos = RoMK_positions[-chapter];
-					}
+				if( ((char*)(&sav_gameStates))[1] == 4  && ((char*)(&sav_gameStates))[3] == 0 ){	//メタ逆のステージ最初のフロアなら
+					int chapter = ((char*)(&sav_gameStates))[2];
+					sav_pos = RoMK_positions[-chapter];	//以前は7以下かの判定を入れていたが、フロア0はムービーに使われてるから必要なかった
 				}else{
 					sav_pos = tmp_pos;
 				}
@@ -340,14 +333,13 @@ int f(int pressed, int r1){
 					sav_inhale2 = *playerInhale2;
 				}
 
-				//ポーズからのQSの場合はQLしない
-				if(*gameState == STATE_PAUSE){
-					//曲の設定。Lなら通常、Rなら曲リセット
-					options = held;
-					break;
-				}
-			}
-			
+				//曲の設定。Lなら通常、Rなら曲リセット
+				options = held;
+		}
+		break;
+	case STATE_PLAY:
+		//通常時にLでQL
+		if( (L & pressed) && sav_gameStates && *gameMode == ((char*)(&sav_gameStates))[1] ){
 			//タイマーリセット
 			*timer = TIMER_RESET;	//QLの検知のため
 
