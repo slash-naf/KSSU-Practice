@@ -398,9 +398,16 @@ int f(int pressed, int r1){
 					*mww_selectedAbility = sav_mww_selectedAbility;
 					*mww_changingSelectedAbility = 1;
 					//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
+					/*
 					for(int i=0; i < 8; i++){
 						mww_abilitiesByStage[i] = 0;
 					}
+					*/
+					//コンパイラが最適化してくれないので
+					mww_abilitiesByStage[0] = 0;
+					*(int*)(mww_abilitiesByStage+1) = 0;
+					*(short*)(mww_abilitiesByStage+5) = 0;
+					mww_abilitiesByStage[7] = 0;
 					break;
 				case MKU:
 					//メタナイトでゴーのPtを最大に
