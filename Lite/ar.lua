@@ -481,4 +481,12 @@ eq(0x021A51C4, 0xE3A00003)
 	print("221A51C4 00000001")
 d2()
 
+--グルメレースで複数回QLするとエンディング行くのを防ぐ
+print()
+print("[Prevent GR Ending]")
+
+eq(gameMode, GameMode.GOURMET_RACE)
+eq(0x0206B418, 0xE2815001)
+	print("0206B418 E1A05001")
+d2()
 
