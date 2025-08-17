@@ -610,4 +610,50 @@ function mix_view()
 
 end
 
-QSQL()
+
+function input_log()
+	--コンパイル
+	os.execute([[clang -target armv5-none-none-eabi -c input_log.c -o input_log.o -O3 & pause]])
+
+
+	
+	local copyAddr = 0x023FE700	--コードのコピー先
+	local bssAddr = 0x023FDF80	--変数のアドレス
+
+	local codes = read_ELF(copyAddr, "input_log.o")
+	if codes == nil then
+		return
+	end
+
+
+	table.insert(codes, 1, 0xE0000004)
+
+
+	for i=1, #codes do
+		local c = bit.band(codes[i], 0xF0000000)
+		local n = bit.band(codes[i], 0x0FFFF000)
+		if n == 0x08BD8000 then
+			codes[i] = c + 0x08BD801F
+		elseif n == 0x092D4000 then
+			codes[i] = c + 0x092D401F
+		elseif codes[i] == 0 then
+			codes[i] = bssAddr
+		end
+	end
+
+
+
+
+	if_eq(copyAddr, 0)
+	patch(copyAddr, codes)
+	d2()
+
+	--割り込ませる
+	addr = 0x023FE00C
+	if_eq(addr, 0xE0000004)
+	writedword(addr, call(addr, copyAddr))
+	d2()
+
+end
+
+input_log()
