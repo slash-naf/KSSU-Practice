@@ -656,4 +656,42 @@ function input_log()
 
 end
 
-input_log()
+function log_dump()
+	--コンパイル
+	os.execute([[clang -target armv5-none-none-eabi -c log_dump.c -o log_dump.o -O3 & pause]])
+	
+	local copyAddr = 0x02EFFFA0	--コードのコピー先
+
+	local codes = read_ELF(copyAddr, "log_dump.o")
+	if codes == nil then
+		return
+	end
+
+	table.remove(codes)
+
+	for i=1, #codes do
+		if codes[i] == 0x01A00000 then
+			codes[i] = jump(copyAddr + 4*(i-1), 0x03802B78) - 0xE0000000
+		elseif codes[i] == 0xE1A00000 then
+			codes[i] = jump(copyAddr + 4*(i-1), 0x03802B78)
+		end
+	end
+
+
+
+
+	if_eq(0x023FDF30, 0x06010301)	--水晶の畑のセーブ部屋でQSなら
+	print("92041E68 00000004")	--セレクトボタン押したら
+	
+	patch(copyAddr, codes)
+
+	--割り込ませる
+	addr = 0x03802B74
+	writedword(addr, jump(addr, copyAddr))
+
+	d2()
+
+end
+
+
+log_dump()
