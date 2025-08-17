@@ -75,6 +75,7 @@ void f(int pressed, int r1){
 			int newSize = p[-2];
 			p[-1] = newSize;
 			p[0] = newSize;
+			show[3] = newSize/2;
 		}
 	}
 
