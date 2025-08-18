@@ -473,13 +473,63 @@ ne(pressed_buttons, 0, Button.SELECT)	--SELECTを押したのでなければ
 d2()
 
 
---メタ逆でエンディングを流す代わりにそのフロアを再度ロード
+--エンディングを流す代わりにそのフロアを再度ロード
 print()
-print("[Prevent RoMK Ending]")
+print("[Prevent Ending]")
 
+
+
+
+--[[
+
+洞窟
+0205B244	3620f	0217D4FC
+0205B244	3637f	0208CB84
+
+0217D4F0	E3A01003	mov r1,#3
+memory.writebyte(0x0217D4F0, 1)
+
+
+ダイナ
+0205B244	5168f	021A4470
+0205B244	5185f	0208CB84
+
+021A4464	E3A01003	mov r1,#3
+memory.writebyte(0x021A4464, 1)
+
+
+銀河
+--memory.writebyte(0x021A6C38, 1)
+
+
+メタゴー
+--memory.writebyte(0x021A9BF4, 1)
+最後のフロア 3b040801
+
+
+]]
+
+
+eq(gameMode, GameMode.DYNA_BLADE)
+	print("221A4464 00000001")
+d2()
+eq(gameMode, GameMode.GCO)
+	print("2217D4F0 00000001")
+d2()
 eq(gameMode, GameMode.RoMK)
 	print("221A51C4 00000001")
 d2()
+eq(gameMode, GameMode.MWW)
+	print("221A6C38 00000001")
+d2()
+eq(gameMode, GameMode.MKU)
+	print("221A9BF4 00000001")
+d2()
+
+
+
+
+
 
 --グルメレース
 print()
