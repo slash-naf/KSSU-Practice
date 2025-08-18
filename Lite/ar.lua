@@ -477,16 +477,27 @@ d2()
 print()
 print("[Prevent RoMK Ending]")
 
-eq(0x021A51C4, 0xE3A00003)
+eq(gameMode, GameMode.RoMK)
 	print("221A51C4 00000001")
 d2()
 
---グルメレースで複数回QLするとエンディング行くのを防ぐ
+--グルメレース
 print()
 print("[Prevent GR Ending]")
 
+function jump(addr, target)	--ジャンプ処理を返す
+	return tonumber("EA"..string.sub(string.format("%08X", (target - addr - 8) / 4), 3), 16)
+end
+
 eq(gameMode, GameMode.GOURMET_RACE)
-eq(0x0206B418, 0xE2815001)
-	print("0206B418 E1A05001")
+	print("0206B418 E1A05001")	--複数回QLするとエンディング行くのを防ぐ	add r5,r1,#1 -> mov r5,r1
+
+	--コース3クリアの対策
+	print("021ACB68 "..string.format("%08X", jump(0x021ACB68, 0x023FDF60)))	--add r2,r2,#1 -> b 023FDF60
+	patch(0x023FDF60, {
+		0xE3520003,	--cmp r2,#3
+		0x12822001,	--addne r2,r2,#1
+		jump(0x023FDF68, 0x021ACB6C)
+	})
 d2()
 
