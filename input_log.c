@@ -33,8 +33,13 @@ short* const options = (short*)0x023FDF08;
 unsigned short prev;
 void f(int pressed, int r1){
 
+	//L使わないからタッチの入力の見地に使う
+	unsigned int touch = (*(short*)0x027fffac) & 0x100;
 	unsigned int held;
-	asm volatile("mov %0, r4" : "+r"(held));
+	asm volatile(
+		"orr %0, r4, %1, lsl #1"
+		: "+r"(held), "+r"(touch)
+	);
 
 	if(*monitor_RNG == 0 && *options & LEFT){
 
