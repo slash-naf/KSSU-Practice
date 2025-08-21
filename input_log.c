@@ -33,7 +33,7 @@ short* const options = (short*)0x023FDF08;
 unsigned short prev;
 void f(int pressed, int r1){
 
-	//L使わないからタッチの入力の見地に使う
+	//L使わないからタッチの入力の検知に使う
 	unsigned int touch = (*(short*)0x027fffac) & 0x100;
 	unsigned int held;
 	asm volatile(
@@ -85,19 +85,3 @@ void f(int pressed, int r1){
 	}
 
 }
-
-
-/*
-噴射の出る教会
-0	
-0	B
-0	B
-1	B
-2	B
-
-扉
-608	
-609	^
-610	
-610	
-*/
