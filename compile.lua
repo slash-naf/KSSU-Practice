@@ -660,20 +660,18 @@ function log_dump()
 	--コンパイル
 	os.execute([[clang -target armv5-none-none-eabi -c log_dump.c -o log_dump.o -O3 & pause]])
 	
-	local copyAddr = 0x02EFFFA0	--コードのコピー先
+	local copyAddr = 0x023FDFA0	--コードのコピー先
 
 	local codes = read_ELF(copyAddr, "log_dump.o")
 	if codes == nil then
 		return
 	end
 
-	table.remove(codes)
+
 
 	for i=1, #codes do
-		if codes[i] == 0x01A00000 then
-			codes[i] = jump(copyAddr + 4*(i-1), 0x03802B78) - 0xE0000000
-		elseif codes[i] == 0xE1A00000 then
-			codes[i] = jump(copyAddr + 4*(i-1), 0x03802B78)
+		if codes[i] == ret then
+			codes[i] = jump(copyAddr + 4*(i-1), 0x02026BF0)
 		end
 	end
 
@@ -686,8 +684,12 @@ function log_dump()
 	patch(copyAddr, codes)
 
 	--割り込ませる
-	addr = 0x03802B74
+	addr = 0x02026BD4
 	writedword(addr, jump(addr, copyAddr))
+
+	--
+	print("DA000000 02F00000")
+	print("D7000000 02EFFFF8")
 
 	d2()
 
