@@ -91,7 +91,7 @@ void update(){
 	asm volatile("ldrh r5, [pc, #-0x14]");	//seed_advances
 	asm volatile("ldr r7, [r4, #0]");	//seed
 	asm volatile("ldrh r6, [pc, #-0x12]");	//narrowed_seed_advances
-	asm volatile("ldr r4, [r4, #0x24]");	//timer
+	asm volatile("ldrh r4, [r4, #-0x2]");	//seedTimer
 
 	asm volatile("stmia r8, {r4-r7}");	//書き込み
 
