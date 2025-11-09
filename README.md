@@ -1,4 +1,4 @@
-# 星のカービィ ウルトラスーパーデラックス 練習用チートv2.6
+# 星のカービィ ウルトラスーパーデラックス 練習用チートv2.7
 
 ## 導入方法
 
@@ -60,38 +60,58 @@ QL時にはタイマーのリセット、HP全回復、残機99、メタナイ�
 
 下画面に4桁の数値が4つ表示され、フロア遷移時のタイムを一番左に、区間タイムを右3つに表示する
 
-### Mix View
-
-ミックスをしたときに4fのどのタイミングだったかを表示する  
-他の行動で誤作動することもあるけどまあそんなに問題ない
-
 ### R + START to Pause Anytime
 
-RとSTARTを押すと、はるかぜのステージ冒頭のムービー中とかワープスターに乗ってるときでもポーズできる
+RとSTARTを押すと、はるかぜとともにのステージ冒頭のムービー中とかワープスターに乗ってるときでもポーズできる
 
 ### R + SELECT to Die
 
 RとSELECTを押すと死ぬ
-
-### Prevent RoMK Ending
-
-メタナイトの逆襲のエンディングが流れずに再度フロアをロードする
 
 ### Freeze RoMK Timer
 
 これは自分で作ったんじゃなくてネットで拾ってきたやつ  
 メタナイトの逆襲のタイマーが減らなくなる
 
+### Prevent Ending
+
+ダイナブレイド、洞窟大作戦、グルメレース、メタナイトの逆襲、銀河に願いを、メタナイトでゴー、のエンディングが流れずに再度フロアをロードする
+
+### Mix View
+
+ミックスをしたときに4fのどのタイミングだったかを表示する  
+他の行動で誤作動することもあるけどまあそんなに問題ない
+
+## 乱数調査用機能
+
+普通は使わないと思うので分けて記述  
+QSQLと併用前提
+
+### QSQL
+
+上押しながらQSで、QL時に乱数と乱数タイマーをロード
+
+左押しながらQSで、ログを有効にする  
+その状態でQLすると、そのフロアと、遷移時の乱数と乱数タイマーの情報をログに追加する  
+Monitor RNG が無効なら、ログを、ログが有効になったときの状態に戻す
+
+### Input Log
+
+ログが有効なら、ボタン入力情報をログに追加  
+ポーズ時に下押しながらセレクトで、ログを無効にし、最後のフロア遷移時までログの状態を戻す
+
+### Dump Log
+
+水しょうの畑のセーブ部屋でQSしてセレクトを押したら、次にセーブが実行されたときにログをセーブファイルにダンプする
+
 ### Monitor RNG
 
-QSQLと併用
-
-乱数をQSQLする
-
-左から2番目に乱数の進んだ量を、左から3番目に8fごとのを除いた乱数の進んだ量を、一番右に乱数の値を表示する  
+一番左に乱数タイマーの値を、左から2番目に乱数の進んだ量を、左から3番目に8fごとのを除いた乱数の進んだ量を、一番右に乱数の値を表示する  
 QLでリセット
 
-以降はこれと併用で、特定の乱数が判定されたら情報を更新する
+ログが有効なら乱数とタイマーの情報をログに追加
+
+以降の Impact Star や Invincibility Star はこれと併用で、その乱数が判定されたら情報を更新する
 
 ## 変数のメモリ配置
 
@@ -118,42 +138,59 @@ QLでリセット
 |02090DF4|1|sav_arena_idx|
 |02090DF5|1|sav_playerRiding|
 
-### QSQL
+### 他
 
 |Address|Size|Name|
-|--:|--:|:--|
-|023FE500|1|sav_mww_selectedAbility|
-|023FE501|1|sav_arena_boss|
-|023FE502|1|sav_playerRiding|
-|023FE503|1|sav_helperRode|
-|023FE504|2|sav_playerInvincibility|
-|023FE506|2|sav_helperInvincibility|
-|023FE508|2|tmp_playerInvincibility|
-|023FE50A|2|tmp_helperInvincibility|
-|023FE50C|2|conf_musicReset|
-|023FE510|4|tmp_pos|
-|023FE514|4|sav_seed|
-|023FE518|4|tmp_seed|
-|023FE51C|4|tmp_playerMode|
-|023FE520|4|sav_inhale1|
-|023FE524|4|sav_inhale2|
-|023FE528|4|sav_playerStates|
-|023FE52C|4|sav_pos|
-|023FE530|4|sav_gameStates|
-|023FE534|4|sav_mww_abilities|
-|023FE538|4|sav_helperStates|
-|023FE53C|4|sav_playerMode|
+|:----|:----|:----|
+|02090DD8|10|show|
+|023FDF00|1|sav_mww_selectedAbility|
+|023FDF01|1|sav_arena_boss|
+|023FDF02|1|sav_playerRiding|
+|023FDF03|1|sav_helperRode|
+|023FDF04|2|sav_playerInvincibility|
+|023FDF06|2|sav_helperInvincibility|
+|023FDF08|2|options|
+|023FDF0a|2|tmp_playerInvincibility|
+|023FDF0c|2|tmp_helperInvincibility|
+|023FDF10|4|tmp_pos|
+|023FDF14|4|sav_seed|
+|023FDF18|4|tmp_seed|
+|023FDF1C|4|tmp_playerMode|
+|023FDF20|4|sav_inhale1|
+|023FDF24|4|sav_inhale2|
+|023FDF28|4|sav_playerStates|
+|023FDF2C|4|sav_pos|
+|023FDF30|4|sav_gameStates|
+|023FDF34|4|sav_mww_abilities|
+|023FDF38|4|sav_helperStates|
+|023FDF3C|4|sav_playerMode|
+|023FDF60|C|Prevent Ending in Gourmet Race|
+|023FDF80|2|prev (input_log.c)|
+|023FE000|550|QSQL|
+|023FE57C|2|seed_advances|
+|023FE57E|2|narrowed_seed_advances|
+|023FE580|D4|Monitor RNG|
+|023FE680|64|Mix View|
+|023FE700|190|Input Log|
+|02EFFFA0|40|Log Dump|
+|02EFFFFE|-|p|
 
-## どうやって作ったか
+## 開発過程
 
-C言語で書いたコードをdesmumeでcompile.luaを使って、ARMv5向けのコンパイルコマンドを実行し、出来たELFファイルを組み込めるように変換し、そのコードを書き込むためのActionReplayコードを作る  
+最初はActionReplayコードを直接書くところから始まった  
+しかし、それだと非効率だしミスもしやすいから、プログラムでActionReplayコードを作れるようにした
+ただ、そもそもActionReplayコードだとできることに制約があるし、nds-bootstrapのチートエンジンだと条件文の入れ子ができないというのもあり、C言語とLuaによる開発に移行した
+
+C言語で書いたコードをDeSmuMEでclangでARMv5向けのコンパイルコマンドを実行し、出来たELFファイルを組み込めるように変換し、そのコードを書き込むためのActionReplayコードを作る  
 かなり無理やりな方法をしている部分があるからうまくいかないこともあるかもしれない
 
 コードはRAMの023FE000に配置した  
-DSATM(DS Auto Trainer Maker)っていう、ROMにチートを埋め込めるアプリがあるんだけど、チート機能がコピーされる場所のデフォルトがそこでほとんどのゲームでは問題ないらしいからそうした  
-実際ウルデラでは問題なかった
+DSATM(DS Auto Trainer Maker)っていう、ROMにチートを埋め込めるアプリがあり、チート機能がコピーされる場所のデフォルトがそこでほとんどのゲームでは問題ないらしいからそうした  
+実際ウルデラでは問題なかった  
+しかし、使えるメモリが少ないため、02F00000以降のメモリを使ったほうが良かっただろう  
+また、使用するメモリがマジコンと競合することが分かったため、純粋にActionReplayコードで動く QSQL Lite を後に作った
 
-そのコードはボタン入力処理の所(020017C0-020017CC)から呼び出した  
+コードはボタン入力処理の所(020017C0-020017CC)から呼び出した  
 毎フレーム実行されるしレジスタにボタン入力情報が入った状態だから都合がいい
 
-QSQL Lite は純粋にActionReplayコードで動いている
+行き当たりばったりで作っていったのでいろいろ複雑になってしまい、これ以上の開発は難しいかもしれない
