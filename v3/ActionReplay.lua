@@ -1,5 +1,5 @@
 --ActionReplayコードの作成
---メモリ書き込み
+---メモリ書き込み
 function write32(addr, val)
 	return {addr, val}
 end
@@ -37,7 +37,7 @@ end
 function d2()
 	return {0xD2000000, 0}
 end
---メモリコピー
+---メモリコピー
 function copy(src, dest, len)
 	return {
 		0xD3000000, src,
@@ -45,7 +45,7 @@ function copy(src, dest, len)
 		0xD3000000, 0
 	}
 end
---一括書き込み
+---一括書き込み
 function patch(dest, codes)
 	local len = #codes * 4
 	if #codes % 2 == 1 then
@@ -54,68 +54,6 @@ function patch(dest, codes)
 	return {0xE0000000 + dest, len, codes}
 end
 
---ARM32の機械語
-local nop = 0xE1A00000 -- nop(mov r0,r0);
-local ret = 0xE12FFF1E -- bx r14;
-local push = 0xE92D5FFF -- stmdb r13!,{r0-r12,r14}; レジスタの退避
-local pop = 0xE8BD5FFF -- ldmia r13!,{r0-r12,r14}; レジスタの復元
-function jump(current_addr, target_addr)	--ジャンプ
-	local n = bit.rshift(target_addr - current_addr, 2) - 2
-	return 0xEA000000 + bit.band(0x00FFFFFF, n)
-end
-function call(current_addr, target_addr)	--サブルーチン呼び出し
-	local n = bit.rshift(target_addr - current_addr, 2) - 2
-	return 0xEB000000 + bit.band(0x00FFFFFF, n)
-end
-
---C言語のファイルをコンパイルしてバイナリを抽出し、そのコードの配置とフックをするARコードを作成
-textAddr = 0x023FE000	--コードの配置先
-function hook(hookAddr, originalCode, path)
-	--機械語のバイナリ取得
-	os.execute("make clean & make SRC=source/"..path.." & pause")
-	local file = io.open("build/payload.bin", "rb")
-	if file == nil then
-		print("error at "..path)
-		return nil
-	end
-	local cur = file:seek()
-	local size = file:seek("end")
-	file:seek("set", cur)
-	local data = file:read("*all")
-	file:close()
-	os.execute("make clean")
-
-	--コードの作成
-	local codes = {
-		originalCode,
-		push,	--レジスタの退避
-		0xE1A0000D,	--mov r0,sp; 退避したレジスタを第一引数に渡す
-		call(0, 12),
-		pop,	--レジスタの復元
-		jump(textAddr + 20, hookAddr + 4)
-	}
-	for i=1, size, 4 do
-		table.insert(
-			codes,
-			string.byte(data, i) +
-			bit.lshift(string.byte(data, i + 1), 8) +
-			bit.lshift(string.byte(data, i + 2), 16) +
-			bit.lshift(string.byte(data, i + 3), 24)
-		)
-	end
-
-	--フックとコードの配置
-	local result = {
-		eq(textAddr, 0),
-			patch(textAddr, codes),
-		d2(),
-		eq(hookAddr, originalCode),
-			write32(hookAddr, jump(hookAddr, textAddr)),
-		d2()
-	}
-	textAddr = textAddr + #codes * 4
-	return result
-end
 
 --コードのまとまりを作成
 function make(name, codes)
@@ -279,3 +217,109 @@ function exec(codes)
 	end
 end
 
+
+--ARM32の機械語
+local nop = 0xE1A00000 -- nop(mov r0,r0);
+local ret = 0xE12FFF1E -- bx r14;
+local push = 0xE92D5FFF -- stmdb r13!,{r0-r12,r14}; レジスタの退避
+local pop = 0xE8BD5FFF -- ldmia r13!,{r0-r12,r14}; レジスタの復元
+function jump(current_addr, target_addr)	--ジャンプ
+	local n = bit.rshift(target_addr - current_addr, 2) - 2
+	return 0xEA000000 + bit.band(0x00FFFFFF, n)
+end
+function call(current_addr, target_addr)	--サブルーチン呼び出し
+	local n = bit.rshift(target_addr - current_addr, 2) - 2
+	return 0xEB000000 + bit.band(0x00FFFFFF, n)
+end
+
+--C言語のファイルをコンパイルしてバイナリを抽出
+function cc(path)
+	--機械語のバイナリ取得
+	os.execute("make clean & make SRC=source/"..path.." & pause")
+
+	local file = io.open("build/payload.bin", "rb")
+	if file == nil then
+		error(path)
+	end
+
+	local cur = file:seek()
+	local size = file:seek("end")
+	file:seek("set", cur)
+	local data = file:read("*all")
+	file:close()
+
+	os.execute("make clean")
+
+	--コードの作成
+	local codes = {}
+	for i=1, size, 4 do
+		table.insert(
+			codes,
+			string.byte(data, i) +
+			bit.lshift(string.byte(data, i + 1), 8) +
+			bit.lshift(string.byte(data, i + 2), 16) +
+			bit.lshift(string.byte(data, i + 3), 24)
+		)
+	end
+	return codes
+end
+--プログラムを常駐させるためのメモリ領域を作る
+function allocateRam(origin, length)
+	local obj = {origin=origin, length=length}
+
+	--プログラムを常駐させる
+	obj.put = function(codes)
+		if obj.length < #codes then
+			error("not fit in ram")
+		end
+
+		local arCodes = {
+			eq(obj.origin, 0),
+				patch(obj.origin, codes),
+			d2()
+		}
+
+		--サブルーチンの呼び出しを上書きする
+		arCodes.overwriteCall = function(addr)
+			local addr = arCodes[0][0]
+			local code = call(addr, targetAddr)
+			return {
+				ne(addr, code),
+					write32(addr, code),
+				d2()
+			}
+		end
+
+		obj.origin = obj.origin + #codes * 4
+		obj.length = obj.length - #codes * 4
+		return arCodes
+	end
+
+	--C言語のファイルをコンパイルしてバイナリを抽出し、そのコードの配置とフックをするARコードを作成
+	obj.hook = function(hookAddr, originalCode, path)
+		--常駐させるコードの作成
+		local codes = {
+			push,	--レジスタの退避
+			0xE1A0000D,	--mov r0,sp; 退避したレジスタを第一引数に渡す
+			call(8, 24),
+			pop,	--レジスタの復元
+			originalCode,	--元の処理を行う
+			jump(obj.origin + 20, hookAddr + 4)	--元の場所に戻る
+		}
+		local cc_codes = cc(path)
+		for i=1, #cc_codes do
+			table.insert(codes, cc_codes[i])
+		end
+
+		--フックとコードの配置
+		local arCodes = {
+			eq(hookAddr, originalCode),
+				write32(hookAddr, jump(hookAddr, obj.origin)),
+			d2()
+		}
+		table.insert(arCodes, obj.put(codes))
+		return arCodes
+	end
+
+	return obj
+end
