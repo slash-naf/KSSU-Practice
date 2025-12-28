@@ -233,13 +233,15 @@ function call(current_addr, target_addr)	--サブルーチン呼び出し
 end
 
 --C言語のファイルをコンパイルしてバイナリを抽出
-function cc(path)
+function cc(path, origin)
 	--機械語のバイナリ取得
-	os.execute("make clean & make SRC=source/"..path.." & pause")
+	local handle = io.popen("make clean & make ADDR="..origin.." SRC=source/"..path)
+	print(handle:read('*a'))
+	handle:close()
 
 	local file = io.open("build/payload.bin", "rb")
 	if file == nil then
-		error(path)
+		error("cc("..path..", "..origin..")")
 	end
 
 	local cur = file:seek()
@@ -247,8 +249,6 @@ function cc(path)
 	file:seek("set", cur)
 	local data = file:read("*all")
 	file:close()
-
-	os.execute("make clean")
 
 	--コードの作成
 	local codes = {}
@@ -279,9 +279,16 @@ function allocateRam(origin, length)
 			d2()
 		}
 
-		--サブルーチンの呼び出しを上書きする
+		obj.origin = obj.origin + #codes * 4
+		obj.length = obj.length - #codes * 4
+		return arCodes
+	end
+
+	--サブルーチンの配置と、呼び出しの上書き
+	obj.putFunc = function(path)
+		local arCodes = obj.put(cc(path, obj.origin))
 		arCodes.overwriteCall = function(addr)
-			local addr = arCodes[0][0]
+			local targetAddr = bit.band(arCodes[0][0], 0x0FFFFFFF)
 			local code = call(addr, targetAddr)
 			return {
 				ne(addr, code),
@@ -289,9 +296,6 @@ function allocateRam(origin, length)
 				d2()
 			}
 		end
-
-		obj.origin = obj.origin + #codes * 4
-		obj.length = obj.length - #codes * 4
 		return arCodes
 	end
 
@@ -306,7 +310,7 @@ function allocateRam(origin, length)
 			originalCode,	--元の処理を行う
 			jump(obj.origin + 20, hookAddr + 4)	--元の場所に戻る
 		}
-		local cc_codes = cc(path)
+		local cc_codes = cc(path, obj.origin + 24)
 		for i=1, #cc_codes do
 			table.insert(codes, cc_codes[i])
 		end

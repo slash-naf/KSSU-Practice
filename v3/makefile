@@ -7,6 +7,7 @@
 TARGET      := payload
 BUILD       := build
 SRC         ?= source/main.c
+ADDR        ?= 0x023FE000
 OBJ         := $(BUILD)/$(notdir $(SRC:.c=.o))
 
 # 環境変数 DEVKITARM が設定されていることを確認
@@ -24,7 +25,7 @@ OBJDUMP     := $(PREFIX)objdump
 # --- フラグ設定 ---
 ARCH        := -mcpu=arm946e-s -march=armv5te -marm
 CFLAGS      := $(ARCH) -Os -ffreestanding -fomit-frame-pointer -Wall -Wextra -Werror -fno-strict-aliasing
-LDFLAGS     := $(ARCH) -nostartfiles -nostdlib -T linker.ld -Wl,-Map,$(BUILD)/$(TARGET).map
+LDFLAGS     := $(ARCH) -nostartfiles -nostdlib -T linker.ld -Wl,-Map,$(BUILD)/$(TARGET).map -Wl,--defsym=START_ADDR=$(ADDR)
 
 # --- ビルドロール ---
 .PHONY: all clean dump
