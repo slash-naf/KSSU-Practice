@@ -125,6 +125,45 @@ void _start(void){
 		}
 		break;
 	case STATE_PLAY:
+		if(R & heldButtons){
+			//R押しながらSTARTで、はるかぜとともにのステージ冒頭のムービー中とかワープスターに乗ってるときでもポーズできる
+			if(START & pressedButtons){
+				gameState = STATE_PAUSE;
+				break;
+			}
+			if(L & pressedButtons){
+				//RとSELECTを押しながらLで死ぬ
+				if(SELECT & heldButtons){
+					gameState = STATE_DIE;
+					break;
+				}
+				//Rと右を押しながらLで次のフロアへ
+				if(RIGHT & heldButtons){
+					room++;
+					gameState = STATE_FLOOR_LOAD;
+					break;
+				}
+				//Rと左を押しながらLで前のフロアへ
+				if((LEFT & heldButtons) && (room != 0)){
+					room--;
+					gameState = STATE_FLOOR_LOAD;
+					break;
+				}
+				//Rと上を押しながらLで次のステージへ
+				if(UP & heldButtons){
+					stage++;
+					gameState = STATE_FLOOR_LOAD;
+					break;
+				}
+				//Rと下を押しながらLで前のステージへ
+				if((DOWN & heldButtons) && (stage != 0)){
+					stage--;
+					gameState = STATE_FLOOR_LOAD;
+					break;
+				}
+			}
+		}
+
 		//通常時にLでQL
 		if( (L & pressedButtons) && ctx.sav_gameStates != 0 && gameMode == ((int8_t*)(&(ctx.sav_gameStates)))[1] ){
 			//タイマーリセット
