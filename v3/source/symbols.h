@@ -151,49 +151,51 @@ enum Form{
 #define show                    ((int32_t*)0x02090DD8)     // 下画面に表示させる4桁の数値4つ
 //大域変数
 typedef struct {
-	//遷移時に保持するもの
-	//座標
-	int32_t tmp_pos;
-	int32_t sav_pos;
-	// ワープスターに乗っているかやゴールゲーム中かなど
-	int32_t tmp_playerMode;
-	int32_t sav_playerMode;
-	//QSによる書き込みも遷移時に行うもの
-	//無敵キャンディ
-	int16_t tmp_playerInvincibility;
-	int16_t sav_playerInvincibility;
-	int16_t tmp_helperInvincibility;
-	int16_t sav_helperInvincibility;
-	//乱数
-	int16_t tmp_seed;
-	int16_t sav_seed;
-	int16_t tmp_seedTimer;
-	int16_t sav_seedTimer;
+	//QSQL.c
+		//遷移時に保持するもの
+			//座標
+			int32_t tmp_pos;
+			int32_t sav_pos;
+			//ワープスターに乗っているかやゴールゲーム中かなど
+			int32_t tmp_playerMode;
+			int32_t sav_playerMode;
+			//QSによる書き込みも遷移時に行うもの
+				//無敵キャンディ
+				int16_t tmp_playerInvincibility;
+				int16_t sav_playerInvincibility;
+				int16_t tmp_helperInvincibility;
+				int16_t sav_helperInvincibility;
+				//乱数
+				int16_t tmp_seed;
+				int16_t sav_seed;
+				int16_t tmp_seedTimer;
+				int16_t sav_seedTimer;
 
+		//ほおばりのセーブ
+		int32_t sav_inhale1;
+		int32_t sav_inhale2;
 
-	//ほおばりのセーブ
-	int32_t sav_inhale1;
-	int32_t sav_inhale2;
+		//ゲーム状態
+		int32_t sav_gameStates;
 
+		//プレイヤー・ヘルパー
+		int32_t sav_playerStates;
+		int8_t sav_playerRiding;
+		int32_t sav_helperStates;
+		int8_t sav_helperRode;
 
-	//ゲーム状態
-	int32_t sav_gameStates;
+		//銀河
+		int32_t sav_mww_abilities;
+		int8_t sav_mww_selectedAbility;
 
-	//プレイヤー・ヘルパー
-	int32_t sav_playerStates;
-	int8_t sav_playerRiding;
-	int32_t sav_helperStates;
-	int8_t sav_helperRode;
+		//格闘王
+		int8_t sav_arena_boss;
 
-	//銀河
-	int32_t sav_mww_abilities;
-	int8_t sav_mww_selectedAbility;
+		//QS時に押していたボタン
+		int16_t options;
 
-	//格闘王
-	int8_t sav_arena_boss;
-
-	//QS時に押していたボタン
-	int16_t options;
+	//MixView
+	uint8_t mix_cnt;	//MixView用のカウンター
 } Data;
 #define ctx (*(Data*)0x023FD000)
 //定数
