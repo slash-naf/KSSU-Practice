@@ -10,29 +10,30 @@ function write8(addr, val)
 	return {0x20000000 + addr, val}
 end
 ---条件分岐
-function gt(addr, val, mask)
+local function cmp(codetype, addr, val, mask)
+	addr = codetype * 0x10000000 + addr
+	--32ビット比較
 	if mask == nil then
-		return {0x30000000 + addr, val}
+		return {addr, val}
 	end
-	return {0x70000000 + addr, val + bit.lshift(bit.bnot(mask), 16)}
+	--16ビット比較 + マスク
+	if addr % 2 == 1 then
+		addr = addr - 1
+		mask = bit.lshift(mask, 8)
+	end
+	return {addr + 0x40000000, val + bit.lshift(bit.bnot(mask), 16)}
+end
+function gt(addr, val, mask)
+	return cmp(3, addr, val, mask)
 end
 function lt(addr, val, mask)
-	if mask == nil then
-		return {0x40000000 + addr, val}
-	end
-	return {0x80000000 + addr, val + bit.lshift(bit.bnot(mask), 16)}
+	return cmp(4, addr, val, mask)
 end
 function eq(addr, val, mask)
-	if mask == nil then
-		return {0x50000000 + addr, val}
-	end
-	return {0x90000000 + addr, val + bit.lshift(bit.bnot(mask), 16)}
+	return cmp(5, addr, val, mask)
 end
 function ne(addr, val, mask)
-	if mask == nil then
-		return {0x60000000 + addr, val}
-	end
-	return {0xA0000000 + addr, val + bit.lshift(bit.bnot(mask), 16)}
+	return cmp(6, addr, val, mask)
 end
 function d2()
 	return {0xD2000000, 0}
