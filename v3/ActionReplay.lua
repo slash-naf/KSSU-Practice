@@ -74,7 +74,12 @@ function make(name, codes)
 		for i=1, #arr do
 			local x = arr[i]
 			if type(x) == "number" then
-				table.insert(tbl, x)
+				--オフセットレジスタ初期化の処理を、その後すぐD2ならなくす
+				if i % 2 == 1 and x = 0xD2000000 and tbl[#tbl - 1] == 0xD3000000 and tbl[#tbl] == 0 then
+					table.remove(tbl)
+					table.remove(tbl)
+				end
+				table.insert(tbl, bit.band(x, 0xFFFFFFFF))
 			else
 				flat(tbl, x)
 			end
