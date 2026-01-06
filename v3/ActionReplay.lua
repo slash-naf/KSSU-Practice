@@ -38,6 +38,15 @@ end
 function d2()
 	return {0xD2000000, 0}
 end
+--定数を加算してメモリコピー
+function add(src, dest, constant)
+	return {
+		0xD9000000, src,
+		0xD4000000, constant,
+		0xD6000000, dest,
+		0xD3000000, 0
+	}
+end
 ---メモリコピー
 function copy(src, dest, len)
 	return {
