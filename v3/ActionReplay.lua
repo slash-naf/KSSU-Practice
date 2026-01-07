@@ -75,9 +75,9 @@ function make(name, codes)
 			local x = arr[i]
 			if type(x) == "number" then
 				--オフセットレジスタ初期化の処理を、その後すぐD2ならなくす
-				if i % 2 == 1 and x = 0xD2000000 and tbl[#tbl - 1] == 0xD3000000 and tbl[#tbl] == 0 then
-					table.remove(tbl)
-					table.remove(tbl)
+				if (#tbl % 2) == 0 and x == 0xD2000000 and tbl[#tbl - 1] == bit.band(0xD3000000, 0xFFFFFFFF) and tbl[#tbl] == 0 then
+					table.remove(tbl, #tbl)
+					table.remove(tbl, #tbl)
 				end
 				table.insert(tbl, bit.band(x, 0xFFFFFFFF))
 			else
@@ -98,6 +98,7 @@ function make(name, codes)
 end
 
 --ActionReplayコードを実行
+--たぶん欠陥がかなりあるけどallocateRam関連のはたぶん問題ない
 --nds-bootstrapのチートエンジンの仕様を基にしていて、DeSmuMeと違ってD0コードで直前の条件文だけでなく、D2コードと同じようにそれまでの全て条件文を終了させる
 --ループのコードとNitroHaxの拡張コードは未実装(詳しい仕様をちゃんと調べていない)
 function exec(codes)
@@ -158,8 +159,8 @@ function exec(codes)
 
 			-- 条件分岐 (16ビット + マスク)
 			elseif codetype < 0xB then
+				local x = bit.band(bit.band(bit.bnot(bit.rshift(constant, 16)), 0xFFFF), memory.readword(addr))
 				constant = bit.band(constant, 0xFFFF)
-				local x = bit.band(bit.bnot(bit.rshift(constant, 16)), memory.readword(addr))
 				if codetype == 0x7 then
 					-- 7XXXXXXX ZZZZYYYY	Checks if (YYYY) > (not (ZZZZ) & halfword at [XXXX]).
 					execution_status = constant > x
@@ -175,7 +176,7 @@ function exec(codes)
 				end
 
 			-- オフセット/データレジスタ
-			elseif codetype < 0xE then
+			elseif codetype >= 0xD0 then
 				if codetype == 0xB then -- オフセット32ビット読み込み
 					offset = memory.readdword(addr + offset)
 
