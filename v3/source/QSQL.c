@@ -3,11 +3,14 @@
 const int32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
 void _start(void){
+	Sav* s = &ctx.sav[gameMode];
+
 	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
 	consumedItems[0] = 0;
 
 	//座標を監視してフロア遷移時の情報を保持する
 	if(getPos == 0){
+
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(ctx.tmp_pos != 0){
 			ctx.tmp_pos = 0;
@@ -16,13 +19,13 @@ void _start(void){
 				timer = 0;
 
 				//無敵キャンディ時間をロード
-				playerInvincibility = ctx.sav_playerInvincibility;
-				helperInvincibility = ctx.sav_helperInvincibility;
+				playerInvincibility = s->sav_playerInvincibility;
+				helperInvincibility = s->sav_helperInvincibility;
 
 				//QS時に上を押していたら乱数のロード
-				if(ctx.options & UP){
-					seed = ctx.sav_seed;
-					seedTimer = ctx.sav_seedTimer;
+				if(s->options & UP){
+					seed = s->sav_seed;
+					seedTimer = s->sav_seedTimer;
 				}
 			}else{
 				//無敵キャンディ時間を保持
@@ -43,9 +46,9 @@ void _start(void){
 	}
 
 	//ほおばりのロード
-	if(ctx.sav_inhale1 != 0){
-		playerInhale1 = ctx.sav_inhale1;
-		playerInhale2 = ctx.sav_inhale2;
+	if(s->sav_inhale1 != 0){
+		playerInhale1 = s->sav_inhale1;
+		playerInhale2 = s->sav_inhale2;
 		playerInvincibility = 1;
 	}
 
@@ -62,71 +65,71 @@ void _start(void){
 	case STATE_PAUSE:
 		//ポーズ時にXでジェットをセーブ
 		if(X & pressedButtons){
-			((int8_t*)(&ctx.sav_playerStates))[3] = JET;
+			((int8_t*)(&s->sav_playerStates))[3] = JET;
 		}
 		//ポーズ時にYで座標をセーブ
 		if(Y & pressedButtons){
-			ctx.sav_pos = getPos;
+			s->sav_pos = getPos;
 		}
 		//ポーズ時にL/RでQS
 		if((L | R) & pressedButtons){
 			//フロア
-			ctx.sav_gameStates = gameStates ^ (STATE_FLOOR_LOAD ^ STATE_PAUSE);
+			s->sav_gameStates = gameStates ^ (STATE_FLOOR_LOAD ^ STATE_PAUSE);
 
 			//銀河
-			ctx.sav_mww_abilities = mww_abilities;
-			ctx.sav_mww_selectedAbility = mww_selectedAbility;
+			s->sav_mww_abilities = mww_abilities;
+			s->sav_mww_selectedAbility = mww_selectedAbility;
 
 			//格闘王系でのボス
-			ctx.sav_arena_boss = arena_bosses[arena_idx];
+			s->sav_arena_boss = arena_bosses[arena_idx];
 
 			//能力
-			ctx.sav_playerStates = playerStates;
-			ctx.sav_playerRiding = playerRiding;
+			s->sav_playerStates = playerStates;
+			s->sav_playerRiding = playerRiding;
 			
-			ctx.sav_helperStates = helperStates;
-			if(ctx.sav_helperStates == 0x08080101){ctx.sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
-			ctx.sav_helperRode   = helperRode;
+			s->sav_helperStates = helperStates;
+			if(s->sav_helperStates == 0x08080101){s->sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
+			s->sav_helperRode   = helperRode;
 
 			//乱数
-			ctx.sav_seed = ctx.tmp_seed;
-			ctx.sav_seedTimer = ctx.tmp_seedTimer;
+			s->sav_seed = ctx.tmp_seed;
+			s->sav_seedTimer = ctx.tmp_seedTimer;
 
 			//むてきキャンディ
-			ctx.sav_playerInvincibility = ctx.tmp_playerInvincibility;
-			ctx.sav_helperInvincibility = ctx.tmp_helperInvincibility;
+			s->sav_playerInvincibility = ctx.tmp_playerInvincibility;
+			s->sav_helperInvincibility = ctx.tmp_helperInvincibility;
 
 			//フロア遷移時の座標
-			int8_t* sav_gameStatesPtr = (int8_t*)(&(ctx.sav_gameStates));
+			int8_t* sav_gameStatesPtr = (int8_t*)(&(s->sav_gameStates));
 			if( sav_gameStatesPtr[1] == 4 && sav_gameStatesPtr[3] == 0 ){	//メタ逆のステージ最初のフロアなら
 				int32_t chapter = sav_gameStatesPtr[2];
-				ctx.sav_pos = RoMK_positions[chapter];
+				s->sav_pos = RoMK_positions[chapter];
 			}else{
-				ctx.sav_pos = ctx.tmp_pos;
+				s->sav_pos = ctx.tmp_pos;
 			}
 
 			//フロア遷移時の状態
-			if(ctx.sav_gameStates == 0x00040601){
+			if(s->sav_gameStates == 0x00040601){
 				//大王5-1でQSすると次のフロアでソフトロックするのの修正
-				ctx.sav_playerMode = 0;
+				s->sav_playerMode = 0;
 			}else{
-				ctx.sav_playerMode = ctx.tmp_playerMode;
+				s->sav_playerMode = ctx.tmp_playerMode;
 			}
 
 			//ほおばりのセーブ
-			ctx.sav_inhale1 = 0;
+			s->sav_inhale1 = 0;
 			if(playerForm == Form_INHALE){
-				ctx.sav_inhale1 = playerInhale1;
-				ctx.sav_inhale2 = playerInhale2;
+				s->sav_inhale1 = playerInhale1;
+				s->sav_inhale2 = playerInhale2;
 			}
 
 			//曲の設定。Lなら通常、Rなら曲リセット
-			ctx.options = heldButtons;
+			s->options = heldButtons;
 		}
 		break;
 	case STATE_PLAY:
 		//通常時にLでQL
-		if( (L & pressedButtons) && ctx.sav_gameStates != 0 && gameMode == ((int8_t*)(&(ctx.sav_gameStates)))[1] ){
+		if( (L & pressedButtons) && s->sav_gameStates != 0 ){
 			//タイマーリセット
 			timer = TIMER_RESET;	//QLの検知のため
 
@@ -136,17 +139,17 @@ void _start(void){
 			lives = 99;
 
 			//曲のリセット
-			if(ctx.options & R){
+			if(s->options & R){
 				music = Music_MUTE;
 			}
 
 			//ゲームモード別の処理
 			if(gameMode != HELPER_TO_HERO){
 				//能力のロード
-				playerStates = ctx.sav_playerStates;
-				playerRiding = ctx.sav_playerRiding;
-				helperStates = ctx.sav_helperStates;
-				helperRode   = ctx.sav_helperRode;
+				playerStates = s->sav_playerStates;
+				playerRiding = s->sav_playerRiding;
+				helperStates = s->sav_helperStates;
+				helperRode   = s->sav_helperRode;
 			}
 			switch(gameMode){
 			case THE_ARENA:
@@ -158,15 +161,15 @@ void _start(void){
 					gameState = STATE_ARENA_PROCEED;
 				}else{
 					arena_idx = 0;
-					arena_bosses[0] = ctx.sav_arena_boss;
+					arena_bosses[0] = s->sav_arena_boss;
 					gameState = STATE_ARENA_MATCH;
 				}
 				break;
 			default:
 				//フロアと座標と状態
-				gameStates = ctx.sav_gameStates;
-				setPos = ctx.sav_pos;
-				playerMode = ctx.sav_playerMode;
+				gameStates = s->sav_gameStates;
+				setPos = s->sav_pos;
+				playerMode = s->sav_playerMode;
 				switch(gameMode){
 				case GCO:
 					//洞窟のお宝とボスをリセット
@@ -177,8 +180,8 @@ void _start(void){
 					break;
 				case MWW:
 					//銀河の開放済み能力とその選択位置をQL
-					mww_abilities = ctx.sav_mww_abilities;
-					mww_selectedAbility = ctx.sav_mww_selectedAbility;
+					mww_abilities = s->sav_mww_abilities;
+					mww_selectedAbility = s->sav_mww_selectedAbility;
 					mww_changingSelectedAbility = 1;
 					//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
 					for(int i=0; i < 8; i++){

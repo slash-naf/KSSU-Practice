@@ -74,12 +74,7 @@ function make(name, codes)
 		for i=1, #arr do
 			local x = arr[i]
 			if type(x) == "number" then
-				--オフセットレジスタ初期化の処理を、その後すぐD2ならなくす
-				if (#tbl % 2) == 0 and x == 0xD2000000 and tbl[#tbl - 1] == bit.band(0xD3000000, 0xFFFFFFFF) and tbl[#tbl] == 0 then
-					table.remove(tbl, #tbl)
-					table.remove(tbl, #tbl)
-				end
-				table.insert(tbl, bit.band(x, 0xFFFFFFFF))
+				table.insert(tbl, x)
 			else
 				flat(tbl, x)
 			end
@@ -251,13 +246,14 @@ end
 --C言語のファイルをコンパイルしてバイナリを抽出
 function cc(path, origin)
 	--機械語のバイナリ取得
-	local handle = io.popen("make clean & make ADDR="..origin.." SRC=source/"..path)
-	print(handle:read('*a'))
-	handle:close()
+	local origin_hex = string.format("%08X", origin)
+	local cmd = "make clean && make ADDR=0x"..origin_hex.." SRC=source/"..path.." & pause"
+	print(cmd)
+	os.execute(cmd)
 
 	local file = io.open("build/payload.bin", "rb")
 	if file == nil then
-		error("cc("..path..", "..origin..")")
+		error("cc("..path..", "..origin_hex..")")
 	end
 
 	local cur = file:seek()
