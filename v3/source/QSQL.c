@@ -99,21 +99,26 @@ void _start(void){
 			s->sav_playerInvincibility = ctx.tmp_playerInvincibility;
 			s->sav_helperInvincibility = ctx.tmp_helperInvincibility;
 
-			//フロア遷移時の座標
+			//フロア遷移時の座標と状態
+			s->sav_pos = ctx.tmp_pos;
+			s->sav_playerMode = ctx.tmp_playerMode;
+
 			int8_t* sav_gameStatesPtr = (int8_t*)(&(s->sav_gameStates));
 			if( sav_gameStatesPtr[1] == 4 && sav_gameStatesPtr[3] == 0 ){	//メタ逆のステージ最初のフロアなら
 				int32_t chapter = sav_gameStatesPtr[2];
 				s->sav_pos = RoMK_positions[chapter];
 			}else{
-				s->sav_pos = ctx.tmp_pos;
-			}
-
-			//フロア遷移時の状態
-			if(s->sav_gameStates == 0x00040601){
-				//大王5-1でQSすると次のフロアでソフトロックするのの修正
-				s->sav_playerMode = 0;
-			}else{
-				s->sav_playerMode = ctx.tmp_playerMode;
+				switch(s->sav_gameStates){
+				case 0x00040601:
+					//大王5-1でQSすると次のフロアでソフトロックするのの修正
+					s->sav_playerMode = 0;
+					break;
+				case 0x02080501:
+					//マルク
+					s->sav_pos = 0x02190042;
+					s->sav_playerMode = 0x000000FF;
+					break;
+				}
 			}
 
 			//ほおばりのセーブ
