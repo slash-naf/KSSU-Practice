@@ -9,10 +9,17 @@ void _start(void){
 		break;
 	case STATE_PLAY:
 		//通常時にLでQL
-		if( (L & pressedButtons) && s->sav_gameStates != 0 ){
+		if(L & pressedButtons){
 			//タイマーリセット
 			timer = TIMER_RESET;	//QLの検知のため
 
+			if(s->sav_gameStates == 0){	//QSしてなければ
+				s = &ctx.tmp_sav;
+			}
+		}
+
+		//ロード
+		if(timer >= LOAD_INVINCIBILITY){
 			//HPと残機を最大に
 			playerHP = playerMaxHP;
 			helperHP = helperMaxHP;

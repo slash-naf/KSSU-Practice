@@ -178,14 +178,8 @@ typedef struct {//QSQLでロードする情報
 } Sav;
 //大域変数
 typedef struct {
-	//QSQLで遷移時に保持するもの
-		//座標
-		int32_t tmp_pos;
-		//ワープスターに乗っているかやゴールゲーム中かなど
-		int32_t tmp_playerMode;
-	//QSによる書き込みも遷移時に行うもの
-		//無敵キャンディ
-		int16_t tmp_playerInvincibility;
+	//遷移時に保持するQSQLでロードする情報
+	Sav tmp_sav;
 
 	//ほおばりのセーブ
 	int32_t sav_inhale1;
@@ -199,6 +193,8 @@ typedef struct {
 } Data;
 #define ctx (*(Data*)0x023FE000)
 //定数
-#define TIMER_RESET 0x40000000	//タイマーをリセットしたいとき入れることにした数値
+#define TIMER_RESET        0x40000000	//タイマーをリセットしたいとき入れることにした数値
+#define LOAD_INVINCIBILITY 0x30000000	//タイマーはリセットしないが無敵キャンディのロードはする
+#define POS_VALUE_IN_CORKBOARD 0x020728CC
 
 #endif // SYMBOLS_H
