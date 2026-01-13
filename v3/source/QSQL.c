@@ -20,11 +20,9 @@ void _start(void){
 
 				//無敵キャンディ時間をロード
 				playerInvincibility = s->sav_playerInvincibility;
-				helperInvincibility = s->sav_helperInvincibility;
 			}else{
 				//無敵キャンディ時間を保持
 				ctx.tmp_playerInvincibility = playerInvincibility;
-				ctx.tmp_helperInvincibility = helperInvincibility;
 			}
 		}
 	}else{
@@ -36,9 +34,9 @@ void _start(void){
 	}
 
 	//ほおばりのロード
-	if(s->sav_inhale1 != 0){
-		playerInhale1 = s->sav_inhale1;
-		playerInhale2 = s->sav_inhale2;
+	if(ctx.sav_inhale1 != 0){
+		playerInhale1 = ctx.sav_inhale1;
+		playerInhale2 = ctx.sav_inhale2;
 		playerInvincibility = 1;
 	}
 
@@ -83,7 +81,6 @@ void _start(void){
 
 			//むてきキャンディ
 			s->sav_playerInvincibility = ctx.tmp_playerInvincibility;
-			s->sav_helperInvincibility = ctx.tmp_helperInvincibility;
 
 			//フロア遷移時の座標と状態
 			s->sav_pos = ctx.tmp_pos;
@@ -108,10 +105,10 @@ void _start(void){
 			}
 
 			//ほおばりのセーブ
-			s->sav_inhale1 = 0;
+			ctx.sav_inhale1 = 0;
 			if(playerForm == Form_INHALE){
-				s->sav_inhale1 = playerInhale1;
-				s->sav_inhale2 = playerInhale2;
+				ctx.sav_inhale1 = playerInhale1;
+				ctx.sav_inhale2 = playerInhale2;
 			}
 
 			//曲の設定。Lなら通常、Rなら曲リセット
