@@ -150,6 +150,9 @@ enum Form{
 //自作
 #define show                    ((int32_t*)0x02090DD8)     // 下画面に表示させる4桁の数値4つ
 typedef struct {//QSQLでロードする情報
+	//ゲーム状態
+	int32_t sav_gameStates;
+
 	//座標
 	int32_t sav_pos;
 	//ワープスターに乗っているかやゴールゲーム中かなど
@@ -157,29 +160,23 @@ typedef struct {//QSQLでロードする情報
 	//無敵キャンディ
 	int16_t sav_playerInvincibility;
 	int16_t sav_helperInvincibility;
-	//乱数
-	int16_t sav_seed;
-	int16_t sav_seedTimer;
 
 	//ほおばりのセーブ
 	int32_t sav_inhale1;
 	int32_t sav_inhale2;
 
-	//ゲーム状態
-	int32_t sav_gameStates;
-
 	//プレイヤー・ヘルパー
 	int32_t sav_playerStates;
-	int8_t sav_playerRiding;
 	int32_t sav_helperStates;
+	int8_t sav_playerRiding;
 	int8_t sav_helperRode;
-
-	//銀河
-	int32_t sav_mww_abilities;
-	int8_t sav_mww_selectedAbility;
 
 	//格闘王
 	int8_t sav_arena_boss;
+
+	//銀河
+	int8_t sav_mww_selectedAbility;
+	int32_t sav_mww_abilities;
 
 	//QS時に押していたボタン
 	int16_t options;
@@ -205,7 +202,7 @@ typedef struct {
 	//モードごとのQSQLでロードする情報
 	Sav sav[12];
 } Data;
-#define ctx (*(Data*)0x023FD000)
+#define ctx (*(Data*)0x023FE000)
 //定数
 #define TIMER_RESET 0x40000000	//タイマーをリセットしたいとき入れることにした数値
 

@@ -21,20 +21,10 @@ void _start(void){
 				//無敵キャンディ時間をロード
 				playerInvincibility = s->sav_playerInvincibility;
 				helperInvincibility = s->sav_helperInvincibility;
-
-				//QS時に上を押していたら乱数のロード
-				if(s->options & UP){
-					seed = s->sav_seed;
-					seedTimer = s->sav_seedTimer;
-				}
 			}else{
 				//無敵キャンディ時間を保持
 				ctx.tmp_playerInvincibility = playerInvincibility;
 				ctx.tmp_helperInvincibility = helperInvincibility;
-
-				//QS時に上を押していたら乱数の保持
-				ctx.tmp_seed = seed;
-				ctx.tmp_seedTimer = seedTimer;
 			}
 		}
 	}else{
@@ -90,10 +80,6 @@ void _start(void){
 			s->sav_helperStates = helperStates;
 			if(s->sav_helperStates == 0x08080101){s->sav_helperStates = 0x08080201;}	//通常状態からウィリーライダーをQLするときの対策
 			s->sav_helperRode   = helperRode;
-
-			//乱数
-			s->sav_seed = ctx.tmp_seed;
-			s->sav_seedTimer = ctx.tmp_seedTimer;
 
 			//むてきキャンディ
 			s->sav_playerInvincibility = ctx.tmp_playerInvincibility;
