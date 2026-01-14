@@ -14,9 +14,9 @@ void _start(void){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
 			t->sav_pos = 0;
-			if(ctx.loadSav != NotLoadSav){
+			if(ctx.loadSav != LoadSav_NONE){
 				playerInvincibility = s->sav_playerInvincibility;	//無敵キャンディ時間をロード
-				if(ctx.loadSav == LoadSavAndResetTimer){
+				if(ctx.loadSav == LoadSav_QL){
 					timer = 0;	//タイマーリセット
 				}
 			}else{
@@ -27,7 +27,7 @@ void _start(void){
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
 		if(t->sav_pos == 0){	
-			ctx.loadSav = NotLoadSav;
+			ctx.loadSav = LoadSav_NONE;
 
 			//フロア遷移時の座標と状態
 			t->sav_pos = getPos;	//フロア遷移時の初期座標を保持
@@ -120,7 +120,7 @@ void _start(void){
 	case STATE_PLAY:
 		break;
 	default:
-		if(ctx.loadSav == LoadSavAndResetTimer){
+		if(ctx.loadSav == LoadSav_QL){
 			show[0] = 0;
 		}else{
 			int n = timer - show[0];	//区間タイム

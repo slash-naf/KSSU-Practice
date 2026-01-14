@@ -2,7 +2,7 @@
 
 void _start(void){
 	//既にQS情報をロード中なら
-	if(ctx.loadSav != NotLoadSav){
+	if(ctx.loadSav != LoadSav_NONE){
 		return;
 	}
 
@@ -15,7 +15,7 @@ void _start(void){
 	case STATE_PLAY:
 		//通常時にLでQL
 		if(L & pressedButtons){
-			ctx.loadSav = LoadSavAndResetTimer;
+			ctx.loadSav = LoadSav_QL;
 			if(s->sav_gameStates == 0){	//QSしてなければ
 				s = &ctx.tmp_sav;
 			}
@@ -24,12 +24,12 @@ void _start(void){
 	default:
 		//左押しながらQSしたならループさせる
 		if(s->options & LEFT){
-			ctx.loadSav = LoadSav;
+			ctx.loadSav = LoadSav_OVERRIDE;
 		}
 	}
 
 	//ロード
-	if(ctx.loadSav != NotLoadSav){
+	if(ctx.loadSav != LoadSav_NONE){
 		//HPと残機を最大に
 		playerHP = playerMaxHP;
 		helperHP = helperMaxHP;

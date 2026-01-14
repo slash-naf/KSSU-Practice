@@ -196,10 +196,10 @@ typedef struct {
 } Data;
 #define ctx (*(Data*)0x023FE000)
 //定数
-enum LoadSavEnum{
-	NotLoadSav = 0,
-	LoadSav = 1,
-	LoadSavAndResetTimer = 2,
+enum LoadSav{
+	LoadSav_NONE = 0,
+	LoadSav_OVERRIDE = 1,
+	LoadSav_QL = 2,
 };
 #define POS_VALUE_IN_CORKBOARD 0x020728CC
 
