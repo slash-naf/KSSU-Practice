@@ -10,13 +10,13 @@ void _start(void){
 	consumedItems[0] = 0;
 
 	//座標を監視してフロア遷移時の情報を保持する
-	if(getPos == 0 || getPos == POS_VALUE_IN_CORKBOARD){
+	if((getPos == 0 || getPos == POS_VALUE_IN_CORKBOARD)){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
 			t->sav_pos = 0;
-			if(timer >= LOAD_INVINCIBILITY){	//QLかループ
+			if(ctx.loadSav != NotLoadSav){
 				playerInvincibility = s->sav_playerInvincibility;	//無敵キャンディ時間をロード
-				if(timer >= TIMER_RESET){	//QLしたとき
+				if(ctx.loadSav == LoadSavAndResetTimer){
 					timer = 0;	//タイマーリセット
 				}
 			}else{
@@ -27,6 +27,8 @@ void _start(void){
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
 		if(t->sav_pos == 0){	
+			ctx.loadSav = NotLoadSav;
+
 			//フロア遷移時の座標と状態
 			t->sav_pos = getPos;	//フロア遷移時の初期座標を保持
 			t->sav_playerMode = playerMode;	//フロア遷移時のワープスターに乗っているかやゴールゲーム中かなどの状態を保持
@@ -118,7 +120,7 @@ void _start(void){
 	case STATE_PLAY:
 		break;
 	default:
-		if(timer >= TIMER_RESET){	//QLしたとき
+		if(ctx.loadSav == LoadSavAndResetTimer){
 			show[0] = 0;
 		}else{
 			int n = timer - show[0];	//区間タイム

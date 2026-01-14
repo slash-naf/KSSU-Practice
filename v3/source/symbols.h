@@ -185,6 +185,9 @@ typedef struct {
 	int32_t sav_inhale1;
 	int32_t sav_inhale2;
 
+	//Savのロードの状態
+	uint8_t loadSav;
+
 	//MixView用のカウンター
 	uint8_t mix_cnt;
 
@@ -193,8 +196,11 @@ typedef struct {
 } Data;
 #define ctx (*(Data*)0x023FE000)
 //定数
-#define TIMER_RESET        0x40000000	//タイマーをリセットしたいとき入れることにした数値
-#define LOAD_INVINCIBILITY 0x30000000	//タイマーはリセットしないが無敵キャンディのロードはする
+enum LoadSavEnum{
+	NotLoadSav = 0,
+	LoadSav = 1,
+	LoadSavAndResetTimer = 2,
+};
 #define POS_VALUE_IN_CORKBOARD 0x020728CC
 
 #endif // SYMBOLS_H
