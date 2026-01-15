@@ -16,15 +16,17 @@ void _start(void){
 		//通常時にLでQL
 		if(L & pressedButtons){
 			ctx.loadSav = LoadSav_QL;
-			if(s->sav_gameStates == 0){	//QSしてなければ
+			//QSしてないか、ロードのモードがLOOP(左)かREDO(右)ならそのフロアに遷移した状態をQLする
+			if(s->sav_gameStates == 0 || (ctx.loadOptions & (LoadOption_LOOP | LoadOption_REDO))){
 				s = &ctx.tmp_sav;
 			}
 		}
 		break;
 	default:
-		//左押しながらQSしたならループさせる
-		if(s->options & LEFT){
+		//ロードのモードを左で設定したらそのフロアに遷移した状態へループさせる
+		if(ctx.loadOptions & LoadOption_LOOP){
 			ctx.loadSav = LoadSav_OVERRIDE;
+			s = &ctx.tmp_sav;
 		}
 	}
 
