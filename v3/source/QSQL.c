@@ -10,10 +10,11 @@ void _start(void){
 	consumedItems[0] = 0;
 
 	//座標を監視してフロア遷移時の情報を保持する
-	if((getPos == 0 || getPos == POS_VALUE_IN_CORKBOARD)){
+	if(getPos == 0 || getPos == POS_VALUE_IN_CORKBOARD){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
 			t->sav_pos = 0;
+			ctx.prevMusic = music;
 			if(ctx.loadSav != LoadSav_NONE){
 				playerInvincibility = s->sav_playerInvincibility;	//無敵キャンディ時間をロード
 				if(ctx.loadSav == LoadSav_QL){
@@ -73,6 +74,9 @@ void _start(void){
 
 			//オプションの設定
 			t->options = 0;
+			if(ctx.prevMusic != music){
+				t->options |= SavOption_MUSIC_RESET;
+			}
 		}
 	}
 
@@ -102,8 +106,8 @@ void _start(void){
 		if(Y & pressedButtons){
 			s->sav_pos = getPos;
 		}
-		//ポーズ時にL/RでQS
-		if((L | R) & pressedButtons){
+		//ポーズ時にLでQS
+		if(L & pressedButtons){
 			*s = *t;
 
 			//ほおばりのセーブ
@@ -113,8 +117,12 @@ void _start(void){
 				ctx.sav_inhale2 = playerInhale2;
 			}
 
-			//オプションの設定。Lなら通常、Rなら曲リセット。
+			//オプションの設定
 			s->options = heldButtons;
+		}
+		//ポーズ時にRでロードのモードを設定
+		if(R & pressedButtons){
+			ctx.loadOptions = heldButtons;
 		}
 		break;
 	case STATE_PLAY:

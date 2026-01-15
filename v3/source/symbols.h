@@ -173,8 +173,8 @@ typedef struct {//QSQLでロードする情報
 	//格闘王
 	int8_t sav_arena_boss;
 
-	//QS時に押していたボタン
-	int16_t options;
+	//QS時に押していたボタン+何か
+	uint16_t options;
 } Sav;
 //大域変数
 typedef struct {
@@ -184,6 +184,12 @@ typedef struct {
 	//ほおばりのセーブ
 	int32_t sav_inhale1;
 	int32_t sav_inhale2;
+
+	//曲が変わったかの監視用
+	int32_t prevMusic;
+
+	//ロードのモード
+	uint16_t loadOptions;
 
 	//Savのロードの状態
 	uint8_t loadSav;
@@ -196,6 +202,13 @@ typedef struct {
 } Data;
 #define ctx (*(Data*)0x023FE000)
 //定数
+enum SavOption{
+	SavOption_MUSIC_RESET = 0x1000,
+};
+enum LoadOption{
+	LoadOption_LOOP = LEFT,
+	LoadOption_REDO = RIGHT,
+};
 enum LoadSav{
 	LoadSav_NONE = 0,
 	LoadSav_OVERRIDE = 1,

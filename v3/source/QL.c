@@ -36,7 +36,7 @@ void _start(void){
 		lives = 99;
 
 		//曲のリセット
-		if(s->options & R){
+		if(s->options & SavOption_MUSIC_RESET){
 			music = Music_MUTE;
 		}
 
