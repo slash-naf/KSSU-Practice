@@ -118,7 +118,7 @@ void _start(void){
 			}
 
 			//オプションの設定
-			s->options = heldButtons;
+			s->options |= heldButtons;
 		}
 		//ポーズ時にRでロードのモードを設定
 		if(R & pressedButtons){
