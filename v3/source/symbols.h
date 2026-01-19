@@ -197,10 +197,13 @@ typedef struct {
 	//MixView用のカウンター
 	uint8_t mix_cnt;
 
-	//モードごとのQSQLでロードする情報
-	Sav sav[12];
+	//ゲームモードとセーブスロットごとのQSQLでロードする情報
+	uint8_t indexes[12];
+	Sav sav[12][9];
 } Data;
 #define ctx (*(Data*)0x023FE000)
+//マクロ
+#define ARROW_VAL(x) (((x & RIGHT) ? 1 : ((x & LEFT) >> 4)) * 3 + ((x & UP) ? 1 : ((x & DOWN) >> 6)))	//十字キーの入力に応じた8方向と無入力の9通りの値を得る
 //定数
 enum SavOption{
 	SavOption_MUSIC_RESET = 0x1000,

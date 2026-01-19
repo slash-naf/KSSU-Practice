@@ -3,7 +3,7 @@
 const int32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
 void _start(void){
-	Sav* s = &ctx.sav[gameMode];
+	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
 	Sav* t = &ctx.tmp_sav;
 
 	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
@@ -100,15 +100,22 @@ void _start(void){
 	case STATE_PAUSE:
 		//ポーズ時にXでジェットをセーブ
 		if(X & pressedButtons){
-			((int8_t*)(&s->sav_playerStates))[3] = JET;
+			((int8_t*)(&t->sav_playerStates))[3] = JET;
 		}
 		//ポーズ時にYで座標をセーブ
 		if(Y & pressedButtons){
-			s->sav_pos = getPos;
+			t->sav_pos = getPos;
 		}
 		//ポーズ時にLでQS
 		if(L & pressedButtons){
+			//セーブスロット選択
+			ctx.indexes[gameMode] = ARROW_VAL(heldButtons);
+			s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
+
 			*s = *t;
+
+			//オプションの設定
+			s->options |= heldButtons;
 
 			//ほおばりのセーブ
 			ctx.sav_inhale1 = 0;
@@ -116,9 +123,6 @@ void _start(void){
 				ctx.sav_inhale1 = playerInhale1;
 				ctx.sav_inhale2 = playerInhale2;
 			}
-
-			//オプションの設定
-			s->options |= heldButtons;
 		}
 		//ポーズ時にRでロードのモードを設定
 		if(R & pressedButtons){

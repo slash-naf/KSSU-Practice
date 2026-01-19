@@ -6,7 +6,7 @@ void _start(void){
 		return;
 	}
 
-	Sav* s = &ctx.sav[gameMode];
+	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
 
 	//場面別の処理
 	switch(gameState){
@@ -15,10 +15,25 @@ void _start(void){
 	case STATE_PLAY:
 		//通常時にLでQL
 		if(L & pressedButtons){
-			ctx.loadSav = LoadSav_QL;
-			//QSしてないか、ロードのモードがLOOP(左)かREDO(右)ならそのフロアに遷移した状態をQLする
-			if(s->sav_gameStates == 0 || (ctx.loadOptions & (LoadOption_LOOP | LoadOption_REDO))){
+			//セーブスロット選択
+			if(R & heldButtons){
+				int32_t selIdx = ARROW_VAL(heldButtons);
+				Sav* selSav = &ctx.sav[gameMode][selIdx];
+				//QSされてなければ何もしない
+				if(selSav->sav_gameStates != 0){
+					ctx.loadSav = LoadSav_QL;
+					ctx.indexes[gameMode] = selIdx;
+					s = selSav;
+				}
+			}
+			//ロードのモードがLOOP(左)かREDO(右)ならそのフロアに遷移した状態をQLする
+			else if(ctx.loadOptions & (LoadOption_LOOP | LoadOption_REDO)){
+				ctx.loadSav = LoadSav_QL;
 				s = &ctx.tmp_sav;
+			}
+			//QSされていればQL
+			else if(s->sav_gameStates != 0){
+				ctx.loadSav = LoadSav_QL;
 			}
 		}
 		break;
