@@ -312,14 +312,17 @@ function allocateRam(origin, length)
 	end
 
 	--C言語のファイルをコンパイルしてバイナリを抽出し、そのコードの配置とフックをするARコードを作成
-	obj.hook = function(hookAddr, originalCode, path)
+	obj.hook = function(hookAddr, originalCode, path, retCode)
 		--常駐させるコードの作成
+		if retCode == nil then
+			retCode = originalCode
+		end
 		local codes = {
 			push,	--レジスタの退避
 			0xE1A0000D,	--mov r0,sp; 退避したレジスタを第一引数に渡す
 			call(8, 24),
 			pop,	--レジスタの復元
-			originalCode,	--元の処理を行う
+			retCode,	--元の処理か指定した処理を行う
 			jump(obj.origin + 20, hookAddr + 4)	--元の場所に戻る
 		}
 		local cc_codes = cc(path, obj.origin + 24)
