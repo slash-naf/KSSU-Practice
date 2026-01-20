@@ -17,7 +17,7 @@ void _start(void){
 		if(L & pressedButtons){
 			//セーブスロット選択
 			if(R & heldButtons){
-				int32_t selIdx = ARROW_VAL(heldButtons);
+				int selIdx = ARROW_VAL(heldButtons);
 				Sav* selSav = &ctx.sav[gameMode][selIdx];
 				//QSされてなければ何もしない
 				if(selSav->sav_gameStates != 0){
@@ -98,9 +98,10 @@ void _start(void){
 				mww_selectedAbility = s->sav_mww_selectedAbility;
 				mww_changingSelectedAbility = 1;
 				//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
-				for(int i=0; i < 8; i++){
-					mww_abilitiesByStage[i] = 0;
-				}
+				mww_abilitiesByStage[0] = 0;
+				*(uint32_t*)(mww_abilitiesByStage+1) = 0;
+				*(uint16_t*)(mww_abilitiesByStage+5) = 0;
+				mww_abilitiesByStage[7] = 0;
 				break;
 			case MKU:
 				//メタナイトでゴーのPtを最大に

@@ -1,6 +1,6 @@
 #include "symbols.h"
 
-const int32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
+const uint32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 
 void _start(void){
 	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
@@ -100,7 +100,7 @@ void _start(void){
 	case STATE_PAUSE:
 		//ポーズ時にXでジェットをセーブ
 		if(X & pressedButtons){
-			((int8_t*)(&t->sav_playerStates))[3] = JET;
+			((uint8_t*)(&t->sav_playerStates))[3] = JET;
 		}
 		//ポーズ時にYで座標をセーブ
 		if(Y & pressedButtons){
