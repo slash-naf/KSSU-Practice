@@ -116,6 +116,7 @@ enum Form{
 #define gco_treasuresCnt        (*(uint8_t*)0x0206E112)     // お宝所持数
 #define arena_idx               (*(uint8_t*)0x0206FC62)     // 格闘王系で何戦目か
 #define arena_bosses            ((uint8_t*)0x0206FC66)      // 格闘王系でのボスの並びが記憶されている配列
+#define arena_boss              (*(uint8_t*)0x02049B48)     // 格闘王系での現在のボス
 
 // 銀河
 #define mww_abilities               (*(uint32_t*)0x02070A40)    // 銀河の開放済み能力
@@ -173,7 +174,7 @@ typedef struct {//QSQLでロードする情報
 	//格闘王
 	uint8_t sav_arena_boss;
 
-	//QS時に押していたボタン+何か
+	//何か
 	uint16_t options;
 } Sav;
 //大域変数
@@ -206,7 +207,7 @@ typedef struct {
 #define ARROW_VAL(x) (((x & RIGHT) ? 1 : ((x & LEFT) >> 4)) * 3 + ((x & UP) ? 1 : ((x & DOWN) >> 6)))	//十字キーの入力に応じた8方向と無入力の9通りの値を得る
 //定数
 enum SavOption{
-	SavOption_MUSIC_RESET = 0x1000,
+	SavOption_MUSIC_RESET = 0x1,
 };
 enum LoadOption{
 	LoadOption_LOOP = LEFT,

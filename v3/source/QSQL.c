@@ -70,9 +70,9 @@ void _start(void){
 			t->sav_mww_selectedAbility = mww_selectedAbility;
 
 			//格闘王系でのボス
-			t->sav_arena_boss = arena_bosses[arena_idx];
+			t->sav_arena_boss = arena_boss;
 
-			//オプションの設定
+			//曲を最初からにするかの設定
 			t->options = 0;
 			if(ctx.prevMusic != music){
 				t->options |= SavOption_MUSIC_RESET;
@@ -113,9 +113,6 @@ void _start(void){
 			s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
 
 			*s = *t;
-
-			//オプションの設定
-			s->options |= heldButtons;
 
 			//ほおばりのセーブ
 			ctx.sav_inhale1 = 0;
