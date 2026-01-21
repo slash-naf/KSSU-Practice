@@ -98,6 +98,38 @@ void _start(void){
 	//場面別の処理
 	switch(gameState){
 	case STATE_PAUSE:
+		//ポーズ時にY押しながら左右で格闘王のボスを切り替える
+		if(Y & heldButtons){
+			int last = 13;
+			switch(gameMode){
+			case THE_ARENA:
+				last = 18;
+				goto SWITCH_BOSS;
+			case THE_TRUE_ARENA:
+				last = 9;
+				goto SWITCH_BOSS;
+			case HELPER_TO_HERO:
+			SWITCH_BOSS:
+				int id = t->sav_arena_boss;
+
+				if(LEFT & pressedButtons){
+					id--;
+					if(id < 0){
+						id = last;
+					}
+				}else if(RIGHT & pressedButtons){
+					id++;
+					if(id > last){
+						id = 0;
+					}
+				}else{break;}
+
+				t->sav_arena_boss = id;
+				arena_boss = id;
+				arena_boss_img_changing = 2;
+				break;
+			}
+		}
 		//ポーズ時にXでジェットをセーブ
 		if(X & pressedButtons){
 			((uint8_t*)(&t->sav_playerStates))[3] = JET;

@@ -117,6 +117,7 @@ enum Form{
 #define arena_idx               (*(uint8_t*)0x0206FC62)     // 格闘王系で何戦目か
 #define arena_bosses            ((uint8_t*)0x0206FC66)      // 格闘王系でのボスの並びが記憶されている配列
 #define arena_boss              (*(uint8_t*)0x02049B48)     // 格闘王系での現在のボス
+#define arena_boss_img_changing (*(uint8_t*)0x02049B44)     // 格闘王系での下画面のボスの画像を変化させるための情報。通常時は0、下画面ホワイトアウトで1→3、"???"からの変化は2→3。ImageSwitcher.cを"???"からの変化の処理に上書きすることで、2にすると現在のarena_bossの画像に切り替わる
 
 // 銀河
 #define mww_abilities               (*(uint32_t*)0x02070A40)    // 銀河の開放済み能力

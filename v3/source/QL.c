@@ -52,11 +52,6 @@ void _start(void){
 		helperHP = helperMaxHP;
 		lives = 99;
 
-		//曲のリセット
-		if(s->options & SavOption_MUSIC_RESET){
-			music = Music_MUTE;
-		}
-
 		//ゲームモード別の処理
 		if(gameMode != HELPER_TO_HERO){
 			//能力のロード
@@ -70,16 +65,18 @@ void _start(void){
 		case THE_TRUE_ARENA:
 		case HELPER_TO_HERO:
 			//格闘王系のモードでのボスのロード
-			//R押しながらLで次のボスへ
-			if(R & heldButtons){
-				gameState = STATE_ARENA_PROCEED;
-			}else{
-				arena_idx = 0;
-				arena_bosses[0] = s->sav_arena_boss;
-				gameState = STATE_ARENA_MATCH;
-			}
+			arena_idx = 0;
+			arena_bosses[0] = s->sav_arena_boss;
+			gameState = STATE_ARENA_MATCH;
+			//画像切り替え
+			arena_boss = s->sav_arena_boss;
+			arena_boss_img_changing = 2;
 			break;
 		default:
+			//曲のリセット
+			if(s->options & SavOption_MUSIC_RESET){
+				music = Music_MUTE;
+			}
 			//フロアと座標と状態
 			gameStates = s->sav_gameStates;
 			setPos = s->sav_pos;
