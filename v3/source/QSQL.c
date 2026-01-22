@@ -138,11 +138,16 @@ void _start(void){
 		if(Y & pressedButtons){
 			t->sav_pos = getPos;
 		}
+
+		//十字キーの入力に応じた8方向と無入力の9通りの値を得る
+		int arrow = (heldButtons & 0xF0) >> 4;
+		if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
+
 		//ポーズ時にLでQS
 		if(L & pressedButtons){
 			//セーブスロット選択
-			ctx.indexes[gameMode] = ARROW_VAL(heldButtons);
-			s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
+			ctx.indexes[gameMode] = arrow;
+			s = &ctx.sav[gameMode][arrow];
 
 			*s = *t;
 

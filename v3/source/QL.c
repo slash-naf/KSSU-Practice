@@ -17,12 +17,15 @@ void _start(void){
 		if(L & pressedButtons){
 			//セーブスロット選択
 			if(R & heldButtons){
-				int selIdx = ARROW_VAL(heldButtons);
-				Sav* selSav = &ctx.sav[gameMode][selIdx];
+				//十字キーの入力に応じた8方向と無入力の9通りの値を得る
+				int arrow = (heldButtons & 0xF0) >> 4;
+				if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
+
+				Sav* selSav = &ctx.sav[gameMode][arrow];
 				//QSされてなければ何もしない
 				if(selSav->sav_gameStates != 0){
 					ctx.loadSav = LoadSav_QL;
-					ctx.indexes[gameMode] = selIdx;
+					ctx.indexes[gameMode] = arrow;
 					s = selSav;
 				}
 			}
