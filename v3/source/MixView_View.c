@@ -1,10 +1,11 @@
 #include "symbols.h"
 
 // ミックス結果が表示されるタイミングで実行される処理
-// 引数 r でレジスタにアクセスできる (r[0]=R0, r[2]=R2)
-void _start(int32_t* r){
+void _start(){
 	// 特定の条件（r0とr2が0）の場合のみ処理を実行
-	if(r[0] == 0 && r[2] == 0){
+	register int r0 asm("r0");
+	register int r2 asm("r2");
+	if(r0 == 0 && r2 == 0){
 		int32_t val = 1;
 
 		// カウンターの値に応じて表示する数値(1, 10, 100, 1000)を決定

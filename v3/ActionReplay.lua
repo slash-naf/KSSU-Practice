@@ -285,14 +285,16 @@ function allocateRam(origin, length)
 			error("not fit in ram")
 		end
 
+		local len = #codes * 4
+
 		local arCodes = {
 			eq(obj.origin, 0),
 				patch(obj.origin, codes),
 			d2()
 		}
 
-		obj.origin = obj.origin + #codes * 4
-		obj.length = obj.length - #codes * 4
+		obj.origin = obj.origin + len
+		obj.length = obj.length - len
 		return arCodes
 	end
 
@@ -312,20 +314,29 @@ function allocateRam(origin, length)
 	end
 
 	--C言語のファイルをコンパイルしてバイナリを抽出し、そのコードの配置とフックをするARコードを作成
-	obj.hook = function(hookAddr, originalCode, path, retCode)
+	obj.hook = function(hookAddr, originalCode, path, retCode, retAddr)
 		--常駐させるコードの作成
-		if retCode == nil then
-			retCode = originalCode
+
+		--前処理
+		local codes = {}
+		table.insert(codes, push)	--レジスタの退避
+		local callIdx = #codes
+		table.insert(codes, 0)	--サブルーチン呼び出し
+		table.insert(codes, pop)	--レジスタの復元
+
+		--元の処理とリターン
+		if retCode then
+			table.insert(codes, retCode)
+		elseif retAddr then
+			table.insert(codes, jump(obj.origin + #codes * 4, retAddr))
+		else
+			table.insert(codes, originalCode)	--元の処理を行う
+			table.insert(codes, jump(obj.origin + #codes * 4, hookAddr + 4))	--元の場所にジャンプ
 		end
-		local codes = {
-			push,	--レジスタの退避
-			0xE1A0000D,	--mov r0,sp; 退避したレジスタを第一引数に渡す
-			call(8, 24),
-			pop,	--レジスタの復元
-			retCode,	--元の処理か指定した処理を行う
-			jump(obj.origin + 20, hookAddr + 4)	--元の場所に戻る
-		}
-		local cc_codes = cc(path, obj.origin + 24)
+
+		--コンパイル
+		codes[callIdx+1] = call(obj.origin + callIdx * 4, obj.origin + #codes * 4)
+		local cc_codes = cc(path, obj.origin + #codes * 4)
 		for i=1, #cc_codes do
 			table.insert(codes, cc_codes[i])
 		end

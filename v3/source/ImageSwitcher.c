@@ -6,11 +6,11 @@
 #define load_resource_B ((uint32_t (*)(uint32_t))0x02003820)
 #define setup_resource  ((void (*)(uint32_t, uint32_t, uint32_t, uint32_t))0x02002428)
 
-void _start(int32_t* r) {
-	// R4レジスタにコンテキストのポインタが入っている
-	uint32_t* resource_handle = (uint32_t*)(r[4] + 0x40);
-	uint8_t* load_state = (uint8_t*)(r[4] + 0x44);
-	uint8_t* image_index = (uint8_t*)(r[4] + 0x48);
+void _start() {
+	register int r4 asm("r4");
+	uint32_t* resource_handle = (uint32_t*)(r4 + 0x40);
+	uint8_t* load_state = (uint8_t*)(r4 + 0x44);
+	uint8_t* image_index = (uint8_t*)(r4 + 0x48);
 
 	// ロード処理を実行 (State 2 のフローを模倣: 解放 -> ロード)
 	
