@@ -1,6 +1,17 @@
 #include "symbols.h"
 
 const uint32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
+const uint8_t abilities_for_save[9] = {
+	JET,	//ニュートラル
+	STONE,	//右
+	NORMAL,	//左
+	FIRE,	//左下
+	WING,	//上
+	WHEEL,	//右上
+	NINJA,	//左上
+	PARASOL,	//右下
+	HAMMER,	//下
+};
 
 void _start(void){
 	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
@@ -130,11 +141,7 @@ void _start(void){
 				break;
 			}
 		}
-		//ポーズ時にXでジェットをセーブ
-		if(X & pressedButtons){
-			((uint8_t*)(&t->sav_playerStates))[3] = JET;
-		}
-		//ポーズ時にYで座標をセーブ
+		//ポーズ時にYで、QS用に保持した座標を上書き
 		if(Y & pressedButtons){
 			t->sav_pos = getPos;
 		}
@@ -142,7 +149,11 @@ void _start(void){
 		//十字キーの入力に応じた8方向と無入力の9通りの値を得る
 		int arrow = (heldButtons & 0xF0) >> 4;
 		if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
-
+		//ポーズ時にXで、QS用に保持した能力を上書き
+		if(X & pressedButtons){
+			//十字キーによる能力選択
+			((uint8_t*)(&t->sav_playerStates))[3] = abilities_for_save[arrow];
+		}
 		//ポーズ時にLでQS
 		if(L & pressedButtons){
 			//セーブスロット選択
