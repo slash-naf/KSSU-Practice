@@ -296,68 +296,102 @@ end
 function allocateRam(origin, length)
 	local obj = {origin=origin, length=length}
 
-	--プログラムを常駐させる
-	obj.put = function(codes)
-		if obj.length < #codes then
-			error("not fit in ram")
+	--C言語のソースコードからモジュールを作成
+	obj.createModule = function(path)
+		local module = {
+			path = path, 
+			hooks = {}
+		}
+
+		--フックの登録
+		-- targetFunc: モジュール内の関数名
+		-- hookAddr: フックするアドレス
+		-- originalCode: フックするアドレスの元の命令
+		-- retCode: フック後の戻り方(命令 or アドレス or nil)
+		module.hook = function(targetFunc, hookAddr, originalCode, retCode)
+			table.insert(module.hooks, {
+				func = targetFunc,
+				addr = hookAddr,
+				orig = originalCode,
+				ret = retCode
+			})
 		end
 
-		local len = #codes * 4
+		--ビルドしてARコードを生成
+		module.build = function()
+			--コンパイル
+			local lib = cc(module.path, obj.origin)
+			local codes = lib.codes --バイナリデータ(数値の配列)
+			
+			--各フックのトランポリンコードを作成してライブラリの後ろに追加
+			local hookCodes = {}
+			for i, h in ipairs(module.hooks) do
+				--シンボル解決
+				local targetAddr = lib.symbols[h.func]
+				if targetAddr == nil then
+					error("Symbol not found: " .. h.func)
+				end
 
-		local arCodes = {
-			eq(obj.origin, 0),
-				patch(obj.origin, codes),
-			d2()
-		}
+				--トランポリンの配置アドレス
+				local trampolineAddr = obj.origin + #codes * 4
+				
+				--トランポリンコードの作成
+				local trampoline = {
+					push,	--レジスタの退避
+					call(trampolineAddr + 4, targetAddr),	--サブルーチン呼び出し
+					pop,	--レジスタの復元
+				}
+				
+				--戻り処理
+				if h.ret then
+					if h.ret < 0x10000000 then -- アドレスとして扱う
+						table.insert(trampoline, jump(trampolineAddr + #trampoline * 4, h.ret))
+					else -- 命令として扱う
+						table.insert(trampoline, h.ret)
+					end
+				else
+					table.insert(trampoline, h.orig)	--元の処理を行う
+					table.insert(trampoline, jump(trampolineAddr + #trampoline * 4, h.addr + 4))	--元の場所にジャンプ
+				end
 
-		obj.origin = obj.origin + len
-		obj.length = obj.length - len
-		return arCodes
-	end
+				--ライブラリのコードに追加
+				for _, c in ipairs(trampoline) do
+					table.insert(codes, c)
+				end
 
-	--ライブラリ(複数の関数を含むCコード)のロード
-	obj.loadLibrary = function(path)
-		local lib = cc(path, obj.origin)
-		local arCodes = obj.put(lib.codes)
-		return { symbols = lib.symbols, codes = arCodes }
-	end
+				--フック用のARコード(ジャンプへの書き換え)
+				table.insert(hookCodes, eq(h.addr, h.orig))
+				table.insert(hookCodes, write32(h.addr, jump(h.addr, trampolineAddr)))
+				table.insert(hookCodes, d2())
+			end
 
-	--ロード済みライブラリ内の関数へのフック
-	obj.hookLink = function(hookAddr, originalCode, targetAddr, retCode, retAddr)
-		--常駐させるコードの作成
-		local codes = {
-			push,	--レジスタの退避
-			call(obj.origin + 4, targetAddr),	--サブルーチン呼び出し
-			pop,	--レジスタの復元
-		}
+			--メモリ配置チェック
+			if obj.length < #codes then
+				error("not fit in ram: " .. module.path)
+			end
 
-		--元の処理とリターン
-		if retCode then
-			table.insert(codes, retCode)
-		elseif retAddr then
-			table.insert(codes, jump(obj.origin + #codes * 4, retAddr))
-		else
-			table.insert(codes, originalCode)	--元の処理を行う
-			table.insert(codes, jump(obj.origin + #codes * 4, hookAddr + 4))	--元の場所にジャンプ
+			--ライブラリ+トランポリンの一括書き込みARコード
+			local writeCode = {
+				eq(obj.origin, 0),
+					patch(obj.origin, codes),
+				d2()
+			}
+
+			--メモリ領域の更新
+			local len = #codes * 4
+			obj.origin = obj.origin + len
+			obj.length = obj.length - len
+
+			--結合して返す
+			for _, c in ipairs(hookCodes) do
+				table.insert(writeCode, c)
+			end
+			
+			--ネストしたテーブルをフラット化して返す必要があるが、make()がそれをやるのでこのままで良い
+			return writeCode
 		end
-
-		--フックとコードの配置
-		local arCodes = {
-			eq(hookAddr, originalCode),
-				write32(hookAddr, jump(hookAddr, obj.origin)),
-			d2()
-		}
-		table.insert(arCodes, obj.put(codes))
-		return arCodes
-	end
-
-	--サブルーチン呼び出しの上書き
-	obj.overwriteCall = function(hookAddr, originalAddr, targetAddr)
-		return {
-			eq(hookAddr, call(hookAddr, originalAddr)),
-				write32(hookAddr, call(hookAddr, targetAddr)),
-			d2()
-		}
+		
+		return module
 	end
 
 	return obj
