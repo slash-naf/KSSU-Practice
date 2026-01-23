@@ -1,7 +1,12 @@
 #include "symbols.h"
 
+// ミックスルーレット中に毎フレーム実行されるカウントアップ処理
+void Step(void){
+    ctx.mix_cnt++;
+}
+
 // ミックス結果が表示されるタイミングで実行される処理
-void _start(){
+void View(void){
 	// 特定の条件（r0とr2が0）の場合のみ処理を実行
 	register int r0 asm("r0");
 	register int r2 asm("r2");

@@ -13,7 +13,7 @@ const uint8_t abilities_for_save[9] = {
 	HAMMER,	//下
 };
 
-void _start(void){
+void QS(void){
 	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
 	Sav* t = &ctx.tmp_sav;
 
@@ -194,4 +194,168 @@ void _start(void){
 			}
 		}
 	}
+}
+
+void QL(void){
+	//既にQS情報をロード中なら
+	if(ctx.loadSav != LoadSav_NONE){
+		return;
+	}
+
+	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
+
+	//場面別の処理
+	switch(gameState){
+	case STATE_PAUSE:
+		break;
+	case STATE_PLAY:
+		//通常時にLでQL
+		if(L & pressedButtons){
+			//セーブスロット選択
+			if(R & heldButtons){
+				//十字キーの入力に応じた8方向と無入力の9通りの値を得る
+				int arrow = (heldButtons & 0xF0) >> 4;
+				if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
+
+				Sav* selSav = &ctx.sav[gameMode][arrow];
+				//QSされてなければ何もしない
+				if(selSav->sav_gameStates != 0){
+					ctx.loadSav = LoadSav_QL;
+					ctx.indexes[gameMode] = arrow;
+					s = selSav;
+				}
+			}
+			//ロードのモードがLOOP(左)かREDO(右)ならそのフロアに遷移した状態をQLする
+			else if(ctx.loadOptions & (LoadOption_LOOP | LoadOption_REDO)){
+				ctx.loadSav = LoadSav_QL;
+				s = &ctx.tmp_sav;
+			}
+			//QSされていればQL
+			else if(s->sav_gameStates != 0){
+				ctx.loadSav = LoadSav_QL;
+			}
+		}
+		break;
+	default:
+		//ロードのモードを左で設定したらそのフロアに遷移した状態へループさせる
+		if(ctx.loadOptions & LoadOption_LOOP){
+			ctx.loadSav = LoadSav_OVERRIDE;
+			s = &ctx.tmp_sav;
+		}
+	}
+
+	//ロード
+	if(ctx.loadSav != LoadSav_NONE){
+		//HPと残機を最大に
+		playerHP = playerMaxHP;
+		helperHP = helperMaxHP;
+		lives = 99;
+
+		//ゲームモード別の処理
+		if(gameMode != HELPER_TO_HERO){
+			//能力のロード
+			playerStates = s->sav_playerStates;
+			playerRiding = s->sav_playerRiding;
+			helperStates = s->sav_helperStates;
+			helperRode   = s->sav_helperRode;
+		}
+		switch(gameMode){
+		case THE_ARENA:
+		case THE_TRUE_ARENA:
+		case HELPER_TO_HERO:
+			//格闘王系のモードでのボスのロード
+			arena_idx = 0;
+			arena_bosses[0] = s->sav_arena_boss;
+			gameState = STATE_ARENA_MATCH;
+			//画像切り替え
+			arena_boss = s->sav_arena_boss;
+			arena_boss_img_changing = 2;
+			break;
+		default:
+			//曲のリセット
+			if(s->options & SavOption_MUSIC_RESET){
+				music = Music_MUTE;
+			}
+			//フロアと座標と状態
+			gameStates = s->sav_gameStates;
+			setPos = s->sav_pos;
+			playerMode = s->sav_playerMode;
+			switch(gameMode){
+			case GCO:
+				//洞窟のお宝とボスをリセット
+				gco_treasures[0] = 0;
+				gco_treasures[1] = 0;
+				gco_treasuresCnt = 0;
+				gco_bosses = 0;
+				break;
+			case MWW:
+				//銀河の開放済み能力とその選択位置をQL
+				mww_abilities = s->sav_mww_abilities;
+				mww_selectedAbility = s->sav_mww_selectedAbility;
+				mww_changingSelectedAbility = 1;
+				//増えすぎるとこれを表示するオレンジ色の丸のところのグラフィックがなんかバグるから一応0にしておく
+				mww_abilitiesByStage[0] = 0;
+				*(uint32_t*)(mww_abilitiesByStage+1) = 0;
+				*(uint16_t*)(mww_abilitiesByStage+5) = 0;
+				mww_abilitiesByStage[7] = 0;
+				break;
+			case MKU:
+				//メタナイトでゴーのPtを最大に
+				mkuPt = 50;
+				break;
+			}
+		}
+	}
+}
+
+#define free_resource   ((void (*)(uint32_t))0x02002E78)
+#define load_resource_A ((uint32_t (*)(uint32_t))0x02003BE4)
+#define load_resource_B ((uint32_t (*)(uint32_t))0x02003820)
+#define setup_resource  ((void (*)(uint32_t, uint32_t, uint32_t, uint32_t))0x02002428)
+void ArenaImageSwitcher(void){
+	register int r4 asm("r4");
+	uint32_t* resource_handle = (uint32_t*)(r4 + 0x40);
+	uint8_t* load_state = (uint8_t*)(r4 + 0x44);
+	uint8_t* image_index = (uint8_t*)(r4 + 0x48);
+
+	// ロード処理を実行 (State 2 のフローを模倣: 解放 -> ロード)
+	
+	// 1. 古いリソースを解放
+	if (*resource_handle != 0) {
+		free_resource(*resource_handle);
+		*resource_handle = 0;
+	}
+
+	// 2. モードに応じた最新のリソースをロード
+	uint32_t image_id = *image_index;
+	uint32_t sub_image_id = 0x0206e000 + image_id * 12;
+
+	if (gameMode == THE_ARENA) {
+		// 格闘王の道
+		sub_image_id += 0x140;
+		image_id += 0x40;
+	} else if (gameMode == THE_TRUE_ARENA) {
+		// 真・格闘王への道
+		sub_image_id += 0x014;
+		if(image_id < 6){
+			image_id += 0x53;
+		}else{
+			image_id += 0x57;
+		}
+	} else if (gameMode == HELPER_TO_HERO) {
+		// ヘルパーマスター
+		sub_image_id += 0x098;
+		image_id += 0x31;
+	}
+
+	image_id += 0x12000;
+	setup_resource(1, load_resource_A(image_id), 0x06218400, 0x2400);
+
+	image_id -= 0x30;
+	*resource_handle = load_resource_B(image_id);
+	setup_resource(0x36, *resource_handle, 0x5c00, 0x1a0);
+
+	setup_resource(1, load_resource_A(*(uint32_t*)sub_image_id), 0x06603800, 0x300);
+
+	*load_state = 3;
 }

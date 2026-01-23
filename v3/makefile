@@ -1,8 +1,3 @@
-# -------------------------------------------------------------------------
-# NDS Cheat Payload Makefile
-# Target: ARM946E-S (Flat Binary for Action Replay)
-# -------------------------------------------------------------------------
-
 # --- プロジェクト設定 ---
 TARGET      := payload
 BUILD       := build
@@ -21,6 +16,7 @@ CC          := $(PREFIX)gcc
 LD          := $(PREFIX)gcc
 OBJCOPY     := $(PREFIX)objcopy
 OBJDUMP     := $(PREFIX)objdump
+NM          := $(PREFIX)nm
 
 # --- フラグ設定 ---
 ARCH        := -mcpu=arm946e-s -march=armv5te -marm
@@ -30,7 +26,7 @@ LDFLAGS     := $(ARCH) -nostartfiles -nostdlib -T linker.ld -Wl,-Map,$(BUILD)/$(
 # --- ビルドロール ---
 .PHONY: all clean dump
 
-all: $(BUILD) $(BUILD)/$(TARGET).bin
+all: $(BUILD) $(BUILD)/$(TARGET).bin $(BUILD)/symbols.txt
 
 # ビルドディレクトリ作成
 $(BUILD):
@@ -51,6 +47,11 @@ $(BUILD)/$(TARGET).bin: $(BUILD)/$(TARGET).elf
 	@echo "Creating flat binary..."
 	@$(OBJCOPY) -O binary -S $< $@
 	@echo "Build Complete: $@"
+
+# シンボル情報の抽出
+$(BUILD)/symbols.txt: $(BUILD)/$(TARGET).elf
+	@echo "Generating symbol map..."
+	@$(NM) -g $< > $@
 
 # デバッグ用：逆アセンブルリストの生成
 dump: $(BUILD)/$(TARGET).elf

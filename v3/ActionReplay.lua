@@ -243,37 +243,54 @@ function call(current_addr, target_addr)	--サブルーチン呼び出し
 	return 0xEB000000 + bit.band(0x00FFFFFF, n)
 end
 
---C言語のファイルをコンパイルしてバイナリを抽出
+--C言語のファイルをコンパイルして機械語のバイナリとシンボルを抽出
 function cc(path, origin)
-	--機械語のバイナリ取得
+	--makeコマンドを実行して機械語のバイナリとシンボル情報を生成
 	local origin_hex = string.format("%08X", origin)
 	local cmd = "make clean && make ADDR=0x"..origin_hex.." SRC=source/"..path.." & pause"
 	print(cmd)
 	os.execute(cmd)
 
-	local file = io.open("build/payload.bin", "rb")
-	if file == nil then
-		error("cc("..path..", "..origin_hex..")")
-	end
-
-	local cur = file:seek()
-	local size = file:seek("end")
-	file:seek("set", cur)
-	local data = file:read("*all")
-	file:close()
-
-	--コードの作成
+	--バイナリの読み込み
 	local codes = {}
-	for i=1, size, 4 do
-		table.insert(
-			codes,
-			string.byte(data, i) +
-			bit.lshift(string.byte(data, i + 1), 8) +
-			bit.lshift(string.byte(data, i + 2), 16) +
-			bit.lshift(string.byte(data, i + 3), 24)
-		)
+	local file = io.open("build/payload.bin", "rb")
+	if file then
+		local cur = file:seek()
+		local size = file:seek("end")
+		file:seek("set", cur)
+		local data = file:read("*all")
+		file:close()
+
+		for i=1, size, 4 do
+			table.insert(
+				codes,
+				string.byte(data, i) +
+				bit.lshift(string.byte(data, i + 1), 8) +
+				bit.lshift(string.byte(data, i + 2), 16) +
+				bit.lshift(string.byte(data, i + 3), 24)
+			)
+		end
+	else
+		error("Warning: payload.bin not found")
 	end
-	return codes
+
+	--シンボルの読み込み
+	local symbols = {}
+	local symFile = io.open("build/symbols.txt", "r")
+	if symFile then
+		for line in symFile:lines() do
+			-- "Address Type Name" (例: 023fe000 T _start)
+			local addrStr, typeStr, name = string.match(line, "(%x+)%s+(%a)%s+([%w_]+)")
+			if addrStr and name then
+				symbols[name] = tonumber(addrStr, 16)
+			end
+		end
+		symFile:close()
+	else
+		error("Warning: symbols.txt not found")
+	end
+
+	return { codes = codes, symbols = symbols }
 end
 --プログラムを常駐させるためのメモリ領域を作る
 function allocateRam(origin, length)
@@ -298,31 +315,21 @@ function allocateRam(origin, length)
 		return arCodes
 	end
 
-	--サブルーチンの配置と、呼び出しの上書き
-	obj.putFunc = function(path)
-		local arCodes = obj.put(cc(path, obj.origin))
-		arCodes.overwriteCall = function(addr)
-			local targetAddr = bit.band(arCodes[0][0], 0x0FFFFFFF)
-			local code = call(addr, targetAddr)
-			return {
-				ne(addr, code),
-					write32(addr, code),
-				d2()
-			}
-		end
-		return arCodes
+	--ライブラリ(複数の関数を含むCコード)のロード
+	obj.loadLibrary = function(path)
+		local lib = cc(path, obj.origin)
+		local arCodes = obj.put(lib.codes)
+		return { symbols = lib.symbols, codes = arCodes }
 	end
 
-	--C言語のファイルをコンパイルしてバイナリを抽出し、そのコードの配置とフックをするARコードを作成
-	obj.hook = function(hookAddr, originalCode, path, retCode, retAddr)
+	--ロード済みライブラリ内の関数へのフック
+	obj.hookLink = function(hookAddr, originalCode, targetAddr, retCode, retAddr)
 		--常駐させるコードの作成
-
-		--前処理
-		local codes = {}
-		table.insert(codes, push)	--レジスタの退避
-		local callIdx = #codes
-		table.insert(codes, 0)	--サブルーチン呼び出し
-		table.insert(codes, pop)	--レジスタの復元
+		local codes = {
+			push,	--レジスタの退避
+			call(obj.origin + 4, targetAddr),	--サブルーチン呼び出し
+			pop,	--レジスタの復元
+		}
 
 		--元の処理とリターン
 		if retCode then
@@ -334,13 +341,6 @@ function allocateRam(origin, length)
 			table.insert(codes, jump(obj.origin + #codes * 4, hookAddr + 4))	--元の場所にジャンプ
 		end
 
-		--コンパイル
-		codes[callIdx+1] = call(obj.origin + callIdx * 4, obj.origin + #codes * 4)
-		local cc_codes = cc(path, obj.origin + #codes * 4)
-		for i=1, #cc_codes do
-			table.insert(codes, cc_codes[i])
-		end
-
 		--フックとコードの配置
 		local arCodes = {
 			eq(hookAddr, originalCode),
@@ -349,6 +349,15 @@ function allocateRam(origin, length)
 		}
 		table.insert(arCodes, obj.put(codes))
 		return arCodes
+	end
+
+	--サブルーチン呼び出しの上書き
+	obj.overwriteCall = function(hookAddr, originalAddr, targetAddr)
+		return {
+			eq(hookAddr, call(hookAddr, originalAddr)),
+				write32(hookAddr, call(hookAddr, targetAddr)),
+			d2()
+		}
 	end
 
 	return obj
