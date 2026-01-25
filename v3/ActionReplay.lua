@@ -2,12 +2,21 @@
 local CodeObject = {}
 CodeObject.__index = CodeObject
 
-function createActionReplayCode(name)
+function createActionReplayCode()
 	local self = setmetatable({}, CodeObject)
-	self.name = name
 	self.codes = {}
 	self.symbols = {}
 	return self
+end
+
+-- コードを文字列化
+function CodeObject:toString(name)
+	local out = "[" .. name .. "]\r\n"
+	local codes = self.codes
+	for i=1, #codes, 2 do
+		out = out .. string.format("%08X %08X\r\n", codes[i], codes[i+1])
+	end
+	return out
 end
 
 -- コードを追加
@@ -148,15 +157,18 @@ end
 
 -- 内部関数: C言語のファイルをコンパイルして機械語とシンボルを抽出
 local function cc(path, origin)
-	--makeコマンドを実行して機械語のバイナリとシンボル情報を生成
+	-- パスからファイル名(拡張子なし)を取得
+	local name = string.match(path, "([^/]+)%.%w+$") or path
+	
+	-- makeコマンドを実行して機械語のバイナリとシンボル情報を生成 (失敗時はポーズする)
 	local origin_hex = string.format("%08X", origin)
-	local cmd = "make clean && make ADDR=0x"..origin_hex.." SRC=source/"..path.." & pause"
+	local cmd = "make ADDR=0x"..origin_hex.." SRC=source/"..path
 	print(cmd)
-	os.execute(cmd)
+	os.execute(cmd.." || pause")
 
 	-- バイナリの読み込み
 	local codes = {}
-	local file = io.open("build/payload.bin", "rb")
+	local file = io.open("build/"..name..".bin", "rb")
 	if file then
 		local cur = file:seek()
 		local size = file:seek("end")
@@ -174,23 +186,23 @@ local function cc(path, origin)
 			)
 		end
 	else
-		error("Warning: payload.bin not found")
+		error("Warning: build/"..name..".bin not found")
 	end
 
 	-- シンボルの読み込み
 	local symbols = {}
-	local symFile = io.open("build/symbols.txt", "r")
+	local symFile = io.open("build/"..name..".txt", "r")
 	if symFile then
 		for line in symFile:lines() do
 			-- "Address Type Name" (例: 023fe000 T _start)
-			local addrStr, typeStr, name = string.match(line, "(%x+)%s+(%a)%s+([%w_]+)")
-			if addrStr and name then
-				symbols[name] = tonumber(addrStr, 16)
+			local addrStr, typeStr, symName = string.match(line, "(%x+)%s+(%a)%s+([%w_]+)")
+			if addrStr and symName then
+				symbols[symName] = tonumber(addrStr, 16)
 			end
 		end
 		symFile:close()
 	else
-		error("Warning: symbols.txt not found")
+		error("Warning: build/"..name..".txt not found")
 	end
 
 	return { codes = codes, symbols = symbols }
@@ -200,6 +212,18 @@ end
 function allocateRam(origin, length)
 	local ram = {origin=origin, length=length}
 
+	-- メモリを割り当てる
+	function ram:allocate(size, context)
+		if self.length < size then
+			error(string.format(
+				"Error: Insufficient RAM for '%s'. Required: 0x%X, Available: 0x%X",
+				context, size, self.length
+			))
+		end
+		self.origin = self.origin + size
+		self.length = self.length - size
+	end
+
 	-- C言語のソースコードからモジュールを作成
 	function ram:createModule(path)
 		local startAddr = self.origin
@@ -207,10 +231,7 @@ function allocateRam(origin, length)
 		local lib = cc(path, startAddr)
 
 		-- モジュール本体のサイズ分 RAMを進める (配置重複防止)
-		local len = #lib.codes * 4
-		if self.length < len then error("not fit in ram: " .. path) end
-		self.origin = self.origin + len
-		self.length = self.length - len
+		self:allocate(#lib.codes * 4, path .. " (Main Body)")
 
 		-- モジュールオブジェクトの構築
 		mb.path = path
@@ -218,7 +239,7 @@ function allocateRam(origin, length)
 		mb.symbols = lib.symbols
 		mb.origin = startAddr
 		-- フック用コードは別オブジェクトとして管理
-		mb.hooks = createActionReplayCode("hooks") 
+		mb.hooks = createActionReplayCode() 
 		mb.ram = self -- 親のRAMマネージャへの参照
 
 		-- フックの登録メソッド
@@ -263,10 +284,7 @@ function allocateRam(origin, length)
 			:end_if()
 
 			-- トランポリン分のサイズをRAM管理に反映
-			local len = #trampoline * 4
-			if self.ram.length < len then error("not fit in ram: " .. self.path) end
-			self.ram.origin = self.ram.origin + len
-			self.ram.length = self.ram.length - len
+			self.ram:allocate(#trampoline * 4, self.path .. "::" .. funcName .. " (Hook Trampoline)")
 
 			return self
 		end

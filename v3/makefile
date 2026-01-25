@@ -1,9 +1,11 @@
 # --- プロジェクト設定 ---
-TARGET      := payload
 BUILD       := build
 SRC         ?= source/main.c
 ADDR        ?= 0x023FE000
-OBJ         := $(BUILD)/$(notdir $(SRC:.c=.o))
+NAME        := $(basename $(notdir $(SRC)))
+OBJ         := $(BUILD)/$(NAME).o
+BIN         := $(BUILD)/$(NAME).bin
+SYMBOLS     := $(BUILD)/$(NAME).txt
 
 # 環境変数 DEVKITARM が設定されていることを確認
 ifndef DEVKITARM
@@ -21,12 +23,12 @@ NM          := $(PREFIX)nm
 # --- フラグ設定 ---
 ARCH        := -mcpu=arm946e-s -march=armv5te -marm
 CFLAGS      := $(ARCH) -Os -ffreestanding -fomit-frame-pointer -Wall -Wextra -Werror -fno-strict-aliasing
-LDFLAGS     := $(ARCH) -nostartfiles -nostdlib -T linker.ld -Wl,-Map,$(BUILD)/$(TARGET).map -Wl,--defsym=START_ADDR=$(ADDR)
+LDFLAGS     := $(ARCH) -nostartfiles -nostdlib -T linker.ld -Wl,-Map,$(BUILD)/$(NAME).map -Wl,--defsym=START_ADDR=$(ADDR)
 
 # --- ビルドロール ---
-.PHONY: all clean dump
+.PHONY: all clean
 
-all: $(BUILD) $(BUILD)/$(TARGET).bin $(BUILD)/symbols.txt
+all: $(BUILD) $(BIN) $(SYMBOLS)
 
 # ビルドディレクトリ作成
 $(BUILD):
@@ -38,24 +40,20 @@ $(OBJ): $(SRC)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 # リンク
-$(BUILD)/$(TARGET).elf: $(OBJ)
-	@echo "Linking..."
+$(BUILD)/$(NAME).elf: $(OBJ)
+	@echo "Linking $(NAME) at $(ADDR)..."
 	@$(LD) $(LDFLAGS) $< -o $@
 
 # バイナリ抽出
-$(BUILD)/$(TARGET).bin: $(BUILD)/$(TARGET).elf
+$(BIN): $(BUILD)/$(NAME).elf
 	@echo "Creating flat binary..."
 	@$(OBJCOPY) -O binary -S $< $@
 	@echo "Build Complete: $@"
 
 # シンボル情報の抽出
-$(BUILD)/symbols.txt: $(BUILD)/$(TARGET).elf
+$(SYMBOLS): $(BUILD)/$(NAME).elf
 	@echo "Generating symbol map..."
 	@$(NM) -g $< > $@
-
-# デバッグ用：逆アセンブルリストの生成
-dump: $(BUILD)/$(TARGET).elf
-	@$(OBJDUMP) -d $< > $(BUILD)/$(TARGET).dump
 
 # クリーンアップ
 clean:
