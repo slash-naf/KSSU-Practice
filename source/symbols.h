@@ -197,7 +197,7 @@ typedef struct {
 	uint8_t loadSav;
 
 	//MixView用のカウンター
-	uint8_t mix_cnt;
+	uint32_t mix_cnt;
 
 	//ゲームモードとセーブスロットごとのQSQLでロードする情報
 	uint8_t indexes[12];

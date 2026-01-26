@@ -106,6 +106,18 @@ void QS(void){
 		}
 	}
 
+	//ミックスのカウントの表示
+	if(ctx.mix_cnt != 0){
+		if(ctx.mix_cnt < (ctx.mix_cnt << 20)){
+			ctx.mix_cnt += 0x100000;
+		}else{
+			show[3] = 1;
+			while((ctx.mix_cnt = (ctx.mix_cnt + 1) & 3)){
+				show[3] *= 10;
+			}
+		}
+	}
+
 	//場面別の処理
 	switch(gameState){
 	case STATE_PAUSE:
@@ -312,6 +324,7 @@ void QL(void){
 	}
 }
 
+//真格闘王で下画面のボスの表示を「？？？」から切り替える処理を上書きして他のにも切り替えられるようにする
 #define free_resource   ((void (*)(uint32_t))0x02002E78)
 #define load_resource_A ((uint32_t (*)(uint32_t))0x02003BE4)
 #define load_resource_B ((uint32_t (*)(uint32_t))0x02003820)
@@ -362,4 +375,9 @@ void ArenaImageSwitcher(void){
 	setup_resource(1, load_resource_A(*(uint32_t*)sub_image_id), 0x06603800, 0x300);
 
 	*load_state = 3;
+}
+
+//ミックスルーレット中に毎フレーム実行されるカウントアップ処理
+void MixStep(void){
+    ctx.mix_cnt++;
 }
