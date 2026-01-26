@@ -188,7 +188,7 @@ void QS(void){
 		break;
 	case STATE_PLAY:
 		//はるかぜとともにのステージ冒頭のムービー中とかワープスターに乗ってるときでもポーズできるようにする
-		if(START & pressedButtons){
+		if((R & heldButtons) && (START & heldButtons)){
 			gameState = STATE_PAUSE;
 		}
 		break;
