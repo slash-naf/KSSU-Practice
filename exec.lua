@@ -9,6 +9,13 @@ QSQL = createActionReplayCode()
 	:hook("ArenaImageSwitcher", 0x0206CE00, 0xE5940040, 0xE8BD8010)	--格闘王系モードでの下画面のボスの表示を通常時に切り替える処理を上書き
 	:hook("MixStep", 0x02111E68, 0xE2411001)	--mix_cntのカウントアップ
 )
+
+--Freeze RoMK Timer
+QSQL:if_eq(0x0206B6A0, 0xA2400C21)
+:write32(0x0206B6A4, 0xE1A00000)
+:write32(0x0206B6BC, 0xE1A00000)
+:end_if()
+
 print(QSQL:toString("QSQL"))
 
 gui.register(function()
