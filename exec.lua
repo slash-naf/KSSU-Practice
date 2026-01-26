@@ -1,6 +1,6 @@
 require("ActionReplay")
 
-ram = allocateRam(0x023FD000, 0x1000)
+ram = allocateRam(0x022E0000, 0x1000)
 
 QSQL = createActionReplayCode()
 :import(ram:createModule("QSQL.c")

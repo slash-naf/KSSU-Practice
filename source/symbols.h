@@ -203,7 +203,7 @@ typedef struct {
 	uint8_t indexes[12];
 	Sav sav[12][9];
 } Data;
-#define ctx (*(Data*)0x023FE000)
+#define ctx (*(Data*)0x022E1000)
 
 //定数
 enum SavOption{
