@@ -1,0 +1,15 @@
+--target=arm-none-eabi
+-mcpu=arm946e-s
+-march=armv5te
+-marm
+-Os
+-ffreestanding
+-fomit-frame-pointer
+-Wall
+-Wextra
+-Werror
+-fno-strict-aliasing
+-I.
+-Isource
+-Iv2
+-Wno-uninitialized
