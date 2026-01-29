@@ -1,19 +1,26 @@
-/* 
-    NDS Payload Linker Script
-*/
-
 OUTPUT_FORMAT("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
 OUTPUT_ARCH(arm)
-ENTRY(_start)
 
 SECTIONS {
     /* Makefileから渡されたSTART_ADDRを使用。未定義ならデフォルト値。 */
     . = DEFINED(START_ADDR) ? START_ADDR : 0x023FE000;
 
+    /* ArenaImageSwitcher用関数 */
+    PROVIDE(setup_resource  = 0x02002428);
+    PROVIDE(free_resource   = 0x02002E78);
+    PROVIDE(load_resource_B = 0x02003820);
+    PROVIDE(load_resource_A = 0x02003BE4);
+
+    /* 数値描画用関数 */
+    PROVIDE(draw_image = 0x0200FE64);
+
+    /* 乱数監視用 */
+    PROVIDE(advance_RNG = 0x0200B860);
+    PROVIDE(randi       = 0x0200B8A4);
+
     /*.textセクション: 実行可能コード */
     .text : {
         __text_start = . ;
-        KEEP(*(.text.startup)) /* スタートアップコードを最優先 */
         *(.text)
         *(.text.*)
        . = ALIGN(4); /* ARM命令は4バイト境界が必要 */

@@ -106,7 +106,7 @@ void QS(void){
 		}
 	}
 
-	//ミックスのカウントの表示
+	//ミックスのカウントアップ停止を検知して結果を表示(最初の能力の1F目は検知できない)
 	if(ctx.mix_cnt != 0){
 		if(ctx.mix_cnt < (ctx.mix_cnt << 20)){
 			ctx.mix_cnt += 0x100000;
@@ -123,7 +123,7 @@ void QS(void){
 	case STATE_PAUSE:
 		//ポーズ時にY押しながら左右で格闘王のボスを切り替える
 		if(Y & heldButtons){
-			int last = 13;
+			int last;
 			switch(gameMode){
 			case THE_ARENA:
 				last = 18;
@@ -132,24 +132,27 @@ void QS(void){
 				last = 9;
 				goto SWITCH_BOSS;
 			case HELPER_TO_HERO:
+				last = 13;
 			SWITCH_BOSS:
-				int id = t->sav_arena_boss;
+				if((LEFT | RIGHT) & pressedButtons){
+					int id = t->sav_arena_boss;
 
-				if(LEFT & pressedButtons){
-					id--;
-					if(id < 0){
-						id = last;
+					if(LEFT & pressedButtons){
+						id--;
+						if(id < 0){
+							id = last;
+						}
+					}else{
+						id++;
+						if(id > last){
+							id = 0;
+						}
 					}
-				}else if(RIGHT & pressedButtons){
-					id++;
-					if(id > last){
-						id = 0;
-					}
-				}else{break;}
 
-				t->sav_arena_boss = id;
-				arena_boss = id;
-				arena_boss_img_changing = 2;
+					t->sav_arena_boss = id;
+					arena_boss = id;
+					arena_boss_img_changing = 2;
+				}
 				break;
 			}
 		}
@@ -325,10 +328,10 @@ void QL(void){
 }
 
 //真格闘王で下画面のボスの表示を「？？？」から切り替える処理を上書きして他のにも切り替えられるようにする
-#define free_resource   ((void (*)(uint32_t))0x02002E78)
-#define load_resource_A ((uint32_t (*)(uint32_t))0x02003BE4)
-#define load_resource_B ((uint32_t (*)(uint32_t))0x02003820)
-#define setup_resource  ((void (*)(uint32_t, uint32_t, uint32_t, uint32_t))0x02002428)
+extern void free_resource(uint32_t handle);
+extern uint32_t load_resource_A(uint32_t id);
+extern uint32_t load_resource_B(uint32_t id);
+extern void setup_resource(uint32_t a, uint32_t b, uint32_t c, uint32_t d);
 void ArenaImageSwitcher(void){
 	register int r4 asm("r4");
 	uint32_t* resource_handle = (uint32_t*)(r4 + 0x40);
