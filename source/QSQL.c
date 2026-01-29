@@ -128,11 +128,11 @@ void QS(void){
 			case THE_ARENA:
 				last = 18;
 				goto SWITCH_BOSS;
-			case THE_TRUE_ARENA:
-				last = 9;
-				goto SWITCH_BOSS;
 			case HELPER_TO_HERO:
 				last = 13;
+				goto SWITCH_BOSS;
+			case THE_TRUE_ARENA:
+				last = 9;
 			SWITCH_BOSS:
 				if((LEFT | RIGHT) & pressedButtons){
 					int id = t->sav_arena_boss;
@@ -350,22 +350,18 @@ void ArenaImageSwitcher(void){
 	uint32_t image_id = *image_index;
 	uint32_t sub_image_id = 0x0206e000 + image_id * 12;
 
-	if (gameMode == THE_ARENA) {
-		// 格闘王の道
+	switch(gameMode){
+	case THE_ARENA:	//格闘王の道
 		sub_image_id += 0x140;
 		image_id += 0x40;
-	} else if (gameMode == THE_TRUE_ARENA) {
-		// 真・格闘王への道
-		sub_image_id += 0x014;
-		if(image_id < 6){
-			image_id += 0x53;
-		}else{
-			image_id += 0x57;
-		}
-	} else if (gameMode == HELPER_TO_HERO) {
-		// ヘルパーマスター
+		break;
+	case HELPER_TO_HERO:	//ヘルパーマスターへの道
 		sub_image_id += 0x098;
 		image_id += 0x31;
+		break;
+	default:	//真・格闘王への道
+		sub_image_id += 0x014;
+		image_id += (image_id < 6) ? 0x53 : 0x57;
 	}
 
 	image_id += 0x12000;
