@@ -2,7 +2,7 @@
 local CodeObject = {}
 CodeObject.__index = CodeObject
 
-function createActionReplayCode()
+local function newCode()
 	local self = setmetatable({}, CodeObject)
 	self.codes = {}
 	self.symbols = {}
@@ -70,7 +70,7 @@ end
 function CodeObject:import(mb)
 	-- モジュールの配置先が0の場合(未初期化時)、データを書き込む
 	self:if_eq(mb.origin, 0)
-	:patch(mb.origin, mb.codes)
+	:patch(mb.origin, mb.bin)
 	:end_if()
 	
 	-- フックコードの追加
@@ -167,7 +167,7 @@ local function cc(path, origin)
 	os.execute(cmd.." || pause")
 
 	-- バイナリの読み込み
-	local codes = {}
+	local bin = {}
 	local file = io.open("build/"..name..".bin", "rb")
 	if file then
 		local cur = file:seek()
@@ -178,7 +178,7 @@ local function cc(path, origin)
 
 		for i=1, size, 4 do
 			table.insert(
-				codes,
+				bin,
 				string.byte(data, i) +
 				bit.lshift(string.byte(data, i + 1), 8) +
 				bit.lshift(string.byte(data, i + 2), 16) +
@@ -205,11 +205,11 @@ local function cc(path, origin)
 		error("Warning: build/"..name..".txt not found")
 	end
 
-	return { codes = codes, symbols = symbols }
+	return { bin = bin, symbols = symbols }
 end
 
 -- メモリ管理マネージャの作成
-function allocateRam(origin, length)
+local function allocateRam(origin, length)
 	local ram = {origin=origin, length=length}
 
 	-- メモリを割り当てる
@@ -231,15 +231,15 @@ function allocateRam(origin, length)
 		local lib = cc(path, startAddr)
 
 		-- モジュール本体のサイズ分 RAMを進める (配置重複防止)
-		self:allocate(#lib.codes * 4, path .. " (Main Body)")
+		self:allocate(#lib.bin * 4, path .. " (Main Body)")
 
 		-- モジュールオブジェクトの構築
 		mb.path = path
-		mb.codes = lib.codes
+		mb.bin = lib.bin
 		mb.symbols = lib.symbols
 		mb.origin = startAddr
 		-- フック用コードは別オブジェクトとして管理
-		mb.hooks = createActionReplayCode() 
+		mb.hooks = newCode() 
 		mb.ram = self -- 親のRAMマネージャへの参照
 
 		-- フックの登録メソッド
@@ -254,7 +254,7 @@ function allocateRam(origin, length)
 
 			-- トランポリンコード (レジスタ保存 -> 関数呼び出し -> 復帰) の作成
 			-- トランポリンはモジュール本体の後ろに順次追加される
-			local trampolineAddr = self.origin + #self.codes * 4
+			local trampolineAddr = self.origin + #self.bin * 4
 			local trampoline = {
 				push,
 				call(trampolineAddr + 4, targetAddr),
@@ -275,7 +275,7 @@ function allocateRam(origin, length)
 			end
 
 			-- トランポリンコードをコード配列に追加
-			for _, c in ipairs(trampoline) do table.insert(self.codes, c) end
+			for _, c in ipairs(trampoline) do table.insert(self.bin, c) end
 
 			-- ゲーム側のフック地点を書き換えるARコードを生成
 			-- 条件: 元のコードが変更されていない(メモリズレ対策)場合のみ書き換え
@@ -292,3 +292,8 @@ function allocateRam(origin, length)
 	end
 	return ram
 end
+
+return {
+	newCode=newCode,
+	allocateRam=allocateRam,
+}
