@@ -350,30 +350,21 @@ void QL(void){
 	}
 }
 
-//真格闘王で下画面のボスの表示を「？？？」から切り替える処理を上書きして他のにも切り替えられるようにする
+//真格闘王で下画面のボスの表示を「？？？」から切り替える処理の一部を上書きして他のにも切り替えられるようにする
 extern void free_resource(uint32_t handle);
 extern uint32_t load_resource_A(uint32_t id);
 extern uint32_t load_resource_B(uint32_t id);
 extern void setup_resource(uint32_t a, uint32_t b, uint32_t c, uint32_t d);
-void ArenaImageSwitcher(void){
+void ArenaImageSwitcher(int mode){
 	register int r4 asm("r4");
 	uint32_t* resource_handle = (uint32_t*)(r4 + 0x40);
-	uint8_t* load_state = (uint8_t*)(r4 + 0x44);
 	uint8_t* image_index = (uint8_t*)(r4 + 0x48);
 
-	// ロード処理を実行 (State 2 のフローを模倣: 解放 -> ロード)
-	
-	// 1. 古いリソースを解放
-	if (*resource_handle != 0) {
-		free_resource(*resource_handle);
-		*resource_handle = 0;
-	}
-
-	// 2. モードに応じた最新のリソースをロード
+	//モードに応じたリソースをロード
 	uint32_t image_id = *image_index;
 	uint32_t sub_image_id = 0x0206e000 + image_id * 12;
 
-	switch(gameMode){
+	switch(mode){
 	case THE_ARENA:	//格闘王の道
 		sub_image_id += 0x140;
 		image_id += 0x40;
@@ -382,9 +373,12 @@ void ArenaImageSwitcher(void){
 		sub_image_id += 0x098;
 		image_id += 0x31;
 		break;
-	default:	//真・格闘王への道
+	case THE_TRUE_ARENA:	//真・格闘王への道
 		sub_image_id += 0x014;
 		image_id += (image_id < 6) ? 0x53 : 0x57;
+		break;
+	default:
+		return;
 	}
 
 	image_id += 0x12000;
@@ -396,7 +390,7 @@ void ArenaImageSwitcher(void){
 
 	setup_resource(1, load_resource_A(*(uint32_t*)sub_image_id), 0x06603800, 0x300);
 
-	*load_state = 3;
+	return;
 }
 
 //ミックスルーレット中に毎フレーム実行されるカウントアップ処理

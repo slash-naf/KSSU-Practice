@@ -213,6 +213,27 @@ local function cc(path, origin, bss)
 	return { bin = bin, symbols = symbols }
 end
 
+
+-- 処理を上書き
+function CodeObject:override(targetFunc, originalAddr, originalCode, ret)
+	self:if_eq(originalAddr, originalCode)
+	:write32(originalAddr, call(originalAddr, targetFunc))
+
+	-- 戻り処理の追加
+	if ret then
+		local addr = originalAddr + 4
+		if ret < 0x10000000 then	-- アドレス指定の場合: そのアドレスへジャンプ
+			self:write32(addr, jump(addr, ret))
+		else	-- 命令指定の場合: その命令を実行
+			self:write32(addr, ret)
+		end
+	end
+
+	self:end_if()
+	return self
+end
+
+
 -- メモリ管理マネージャの作成
 -- codeAddr: コード配置開始アドレス
 -- bssAddr: BSSセクション配置開始アドレス
