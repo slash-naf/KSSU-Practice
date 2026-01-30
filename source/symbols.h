@@ -87,6 +87,10 @@ enum Form{
 	Form_SWIM   = 4,
 };
 
+enum Pos{
+	POS_IN_CORKBOARD = 0x020728CC,	//コルクボードでのgetPosの値
+};
+
 // 乱数・タイマー
 #define seed                    (*(uint16_t*)0x02041D3C)    // 乱数
 #define seedTimer               (*(uint16_t*)0x02041D3A)    // 乱数更新タイマー
@@ -191,6 +195,5 @@ enum LoadSav{
 	LoadSav_OVERRIDE = 1,
 	LoadSav_QL = 2,
 };
-#define POS_VALUE_IN_CORKBOARD 0x020728CC
 
 #endif // SYMBOLS_H

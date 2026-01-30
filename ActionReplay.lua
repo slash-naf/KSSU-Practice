@@ -214,37 +214,56 @@ local function cc(path, origin, bss)
 end
 
 -- メモリ管理マネージャの作成
-local function allocateRam(origin, length)
-	local ram = {origin=origin, length=length}
+-- codeAddr: コード配置開始アドレス
+-- bssAddr: BSSセクション配置開始アドレス
+-- endAddr: 使用可能最終アドレス (この直前まで使用可能)
+local function allocateRam(codeAddr, bssAddr, endAddr)
+	local ram = {
+		codeCursor = codeAddr,    -- 現在のコード配置位置 (上方向に成長)
+		bssCursor = bssAddr,      -- 現在のBSS配置位置 (上方向に成長)
+		bssOrigin = bssAddr,      -- BSS領域の開始位置 (コード領域の終端チェック用)
+		endAddr = endAddr,        -- メモリ領域の終端 (BSS領域の終端チェック用)
+	}
 
-	-- メモリを割り当てる
-	function ram:allocate(size, context)
-		if self.length < size then
+	-- コード領域にメモリを割り当てる
+	function ram:allocateCode(size, context)
+		self.codeCursor = self.codeCursor + size
+		if self.codeCursor > self.bssOrigin then
 			error(string.format(
-				"Error: Insufficient RAM for '%s'. Required: 0x%X, Available: 0x%X",
-				context, size, self.length
+				"Error: Code allocation for '%s' overlaps BSS region.\nCode limit: 0x%08X (size: 0x%X)\nBSS start:  0x%08X",
+				context, self.codeCursor, size, self.bssOrigin
 			))
 		end
-		self.origin = self.origin + size
-		self.length = self.length - size
 	end
 
 	-- C言語のソースコードからモジュールを作成
-	function ram:createModule(path, bss)
-		local startAddr = self.origin
-		local mb = {}
-		local lib = cc(path, startAddr, bss)
+	function ram:createModule(path)
+		local origin = self.codeCursor
 
-		-- モジュール本体のサイズ分 RAMを進める (配置重複防止)
-		self:allocate(#lib.bin * 4, path .. " (Main Body)")
+		-- 現在のカーソル位置でコンパイル
+		local lib = cc(path, origin, self.bssCursor)
+
+		-- モジュール本体のサイズ分、コード用カーソルを進める
+		self:allocateCode(#lib.bin * 4, path .. " (Main Body)")
+
+		-- __bss_end シンボルがあれば BSS用カーソルを更新
+		if lib.symbols["__bss_end"] then
+			self.bssCursor = lib.symbols["__bss_end"]
+			if self.bssCursor > self.endAddr then
+				error(string.format(
+					"Error: BSS allocation for '%s' exceeds memory limit.\nBSS limit:  0x%08X\nMemory End: 0x%08X",
+					path, self.bssCursor, self.endAddr
+				))
+			end
+		end
 
 		-- モジュールオブジェクトの構築
+		local mb = {}
 		mb.path = path
 		mb.bin = lib.bin
 		mb.symbols = lib.symbols
-		mb.origin = startAddr
-		-- フック用コードは別オブジェクトとして管理
-		mb.hooks = newCode() 
+		mb.origin = origin
+		mb.hooks = newCode()	-- フック用コードは別オブジェクトとして管理
 		mb.ram = self -- 親のRAMマネージャへの参照
 
 		-- フックの登録メソッド
@@ -259,7 +278,7 @@ local function allocateRam(origin, length)
 
 			-- トランポリンコード (レジスタ保存 -> 関数呼び出し -> 復帰) の作成
 			-- トランポリンはモジュール本体の後ろに順次追加される
-			local trampolineAddr = self.origin + #self.bin * 4
+			local trampolineAddr = self.ram.codeCursor
 			local trampoline = {
 				push,
 				call(trampolineAddr + 4, targetAddr),
@@ -289,7 +308,7 @@ local function allocateRam(origin, length)
 			:end_if()
 
 			-- トランポリン分のサイズをRAM管理に反映
-			self.ram:allocate(#trampoline * 4, self.path .. "::" .. funcName .. " (Hook Trampoline)")
+			self.ram:allocateCode(#trampoline * 4, self.path .. "::" .. funcName .. " (Hook Trampoline)")
 
 			return self
 		end

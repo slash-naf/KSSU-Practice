@@ -44,7 +44,7 @@ void QS(void){
 	consumedItems[0] = 0;
 
 	//座標を監視してフロア遷移時の情報を保持する
-	if(getPos == 0 || getPos == POS_VALUE_IN_CORKBOARD){
+	if(getPos == 0 || getPos == POS_IN_CORKBOARD){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
 			t->sav_pos = 0;
