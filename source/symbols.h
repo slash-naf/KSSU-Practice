@@ -178,33 +178,6 @@ typedef struct {//QSQLでロードする情報
 	//何か
 	uint16_t options;
 } Sav;
-//大域変数
-typedef struct {
-	//遷移時に保持するQSQLでロードする情報
-	Sav tmp_sav;
-
-	//ほおばりのセーブ
-	uint32_t sav_inhale1;
-	uint32_t sav_inhale2;
-
-	//曲が変わったかの監視用
-	uint32_t prevMusic;
-
-	//ロードのモード
-	uint16_t loadOptions;
-
-	//Savのロードの状態
-	uint8_t loadSav;
-
-	//MixView用のカウンター
-	uint32_t mix_cnt;
-
-	//ゲームモードとセーブスロットごとのQSQLでロードする情報
-	uint8_t indexes[12];
-	Sav sav[12][9];
-} Data;
-#define ctx (*(Data*)0x022E1000)
-
 //定数
 enum SavOption{
 	SavOption_MUSIC_RESET = 0x1,

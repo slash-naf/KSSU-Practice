@@ -1,5 +1,28 @@
 #include "symbols.h"
 
+//遷移時に保持するQSQLでロードする情報
+Sav tmp_sav;
+
+//ほおばりのセーブ
+uint32_t sav_inhale1;
+uint32_t sav_inhale2;
+
+//曲が変わったかの監視用
+uint32_t prevMusic;
+
+//ロードのモード
+uint16_t loadOptions;
+
+//Savのロードの状態
+uint8_t loadSav;
+
+//MixView用のカウンター
+uint32_t mix_cnt;
+
+//ゲームモードとセーブスロットごとのQSQLでロードする情報
+uint8_t indexes[12];
+Sav sav[12][9];
+
 const uint32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 const uint8_t abilities_for_save[9] = {
 	JET,	//ニュートラル
@@ -14,8 +37,8 @@ const uint8_t abilities_for_save[9] = {
 };
 
 void QS(void){
-	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
-	Sav* t = &ctx.tmp_sav;
+	Sav* s = &sav[gameMode][indexes[gameMode]];
+	Sav* t = &tmp_sav;
 
 	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
 	consumedItems[0] = 0;
@@ -25,10 +48,10 @@ void QS(void){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
 			t->sav_pos = 0;
-			ctx.prevMusic = music;
-			if(ctx.loadSav != LoadSav_NONE){
+			prevMusic = music;
+			if(loadSav != LoadSav_NONE){
 				playerInvincibility = s->sav_playerInvincibility;	//無敵キャンディ時間をロード
-				if(ctx.loadSav == LoadSav_QL){
+				if(loadSav == LoadSav_QL){
 					timer = 0;	//タイマーリセット
 				}
 			}else{
@@ -39,7 +62,7 @@ void QS(void){
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
 		if(t->sav_pos == 0){	
-			ctx.loadSav = LoadSav_NONE;
+			loadSav = LoadSav_NONE;
 
 			//フロア遷移時の座標と状態
 			t->sav_pos = getPos;	//フロア遷移時の初期座標を保持
@@ -85,16 +108,16 @@ void QS(void){
 
 			//曲を最初からにするかの設定
 			t->options = 0;
-			if(ctx.prevMusic != music){
+			if(prevMusic != music){
 				t->options |= SavOption_MUSIC_RESET;
 			}
 		}
 	}
 
 	//ほおばりのロード
-	if(ctx.sav_inhale1 != 0){
-		playerInhale1 = ctx.sav_inhale1;
-		playerInhale2 = ctx.sav_inhale2;
+	if(sav_inhale1 != 0){
+		playerInhale1 = sav_inhale1;
+		playerInhale2 = sav_inhale2;
 		playerInvincibility = 1;
 	}
 
@@ -107,12 +130,12 @@ void QS(void){
 	}
 
 	//ミックスのカウントアップ停止を検知して結果を表示(最初の能力の1F目は検知できない)
-	if(ctx.mix_cnt != 0){
-		if(ctx.mix_cnt < (ctx.mix_cnt << 20)){
-			ctx.mix_cnt += 0x100000;
+	if(mix_cnt != 0){
+		if(mix_cnt < (mix_cnt << 20)){
+			mix_cnt += 0x100000;
 		}else{
 			show[3] = 1;
-			while((ctx.mix_cnt = (ctx.mix_cnt + 1) & 3)){
+			while((mix_cnt = (mix_cnt + 1) & 3)){
 				show[3] *= 10;
 			}
 		}
@@ -172,21 +195,21 @@ void QS(void){
 		//ポーズ時にLでQS
 		if(L & pressedButtons){
 			//セーブスロット選択
-			ctx.indexes[gameMode] = arrow;
-			s = &ctx.sav[gameMode][arrow];
+			indexes[gameMode] = arrow;
+			s = &sav[gameMode][arrow];
 
 			*s = *t;
 
 			//ほおばりのセーブ
-			ctx.sav_inhale1 = 0;
+			sav_inhale1 = 0;
 			if(playerForm == Form_INHALE){
-				ctx.sav_inhale1 = playerInhale1;
-				ctx.sav_inhale2 = playerInhale2;
+				sav_inhale1 = playerInhale1;
+				sav_inhale2 = playerInhale2;
 			}
 		}
 		//ポーズ時にRでロードのモードを設定
 		if(R & pressedButtons){
-			ctx.loadOptions = heldButtons;
+			loadOptions = heldButtons;
 		}
 		break;
 	case STATE_PLAY:
@@ -196,7 +219,7 @@ void QS(void){
 		}
 		break;
 	default:
-		if(ctx.loadSav == LoadSav_QL){
+		if(loadSav == LoadSav_QL){
 			show[0] = 0;
 		}else{
 			int n = timer - show[0];	//区間タイム
@@ -217,11 +240,11 @@ void QS(void){
 
 void QL(void){
 	//既にQS情報をロード中なら
-	if(ctx.loadSav != LoadSav_NONE){
+	if(loadSav != LoadSav_NONE){
 		return;
 	}
 
-	Sav* s = &ctx.sav[gameMode][ctx.indexes[gameMode]];
+	Sav* s = &sav[gameMode][indexes[gameMode]];
 
 	//場面別の処理
 	switch(gameState){
@@ -236,35 +259,35 @@ void QL(void){
 				int arrow = (heldButtons & 0xF0) >> 4;
 				if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
 
-				Sav* selSav = &ctx.sav[gameMode][arrow];
+				Sav* selSav = &sav[gameMode][arrow];
 				//QSされてなければ何もしない
 				if(selSav->sav_gameStates != 0){
-					ctx.loadSav = LoadSav_QL;
-					ctx.indexes[gameMode] = arrow;
+					loadSav = LoadSav_QL;
+					indexes[gameMode] = arrow;
 					s = selSav;
 				}
 			}
 			//ロードのモードがLOOP(左)かREDO(右)ならそのフロアに遷移した状態をQLする
-			else if(ctx.loadOptions & (LoadOption_LOOP | LoadOption_REDO)){
-				ctx.loadSav = LoadSav_QL;
-				s = &ctx.tmp_sav;
+			else if(loadOptions & (LoadOption_LOOP | LoadOption_REDO)){
+				loadSav = LoadSav_QL;
+				s = &tmp_sav;
 			}
 			//QSされていればQL
 			else if(s->sav_gameStates != 0){
-				ctx.loadSav = LoadSav_QL;
+				loadSav = LoadSav_QL;
 			}
 		}
 		break;
 	default:
 		//ロードのモードを左で設定したらそのフロアに遷移した状態へループさせる
-		if(ctx.loadOptions & LoadOption_LOOP){
-			ctx.loadSav = LoadSav_OVERRIDE;
-			s = &ctx.tmp_sav;
+		if(loadOptions & LoadOption_LOOP){
+			loadSav = LoadSav_OVERRIDE;
+			s = &tmp_sav;
 		}
 	}
 
 	//ロード
-	if(ctx.loadSav != LoadSav_NONE){
+	if(loadSav != LoadSav_NONE){
 		//HPと残機を最大に
 		playerHP = playerMaxHP;
 		helperHP = helperMaxHP;
@@ -378,5 +401,5 @@ void ArenaImageSwitcher(void){
 
 //ミックスルーレット中に毎フレーム実行されるカウントアップ処理
 void MixStep(void){
-    ctx.mix_cnt++;
+    mix_cnt++;
 }

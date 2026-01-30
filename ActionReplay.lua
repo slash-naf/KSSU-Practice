@@ -156,13 +156,18 @@ local function call(currentAddr, targetAddr)	-- startAddr: bl targetAddr; サブ
 end
 
 -- 内部関数: C言語のファイルをコンパイルして機械語とシンボルを抽出
-local function cc(path, origin)
+local function cc(path, origin, bss)
 	-- パスからファイル名(拡張子なし)を取得
 	local name = string.match(path, "([^/]+)%.%w+$") or path
-	
+
 	-- makeコマンドを実行して機械語のバイナリとシンボル情報を生成 (失敗時はポーズする)
-	local origin_hex = string.format("%08X", origin)
-	local cmd = "make ADDR=0x"..origin_hex.." SRC=source/"..path
+	local cmd = "make SRC=source/"..path
+	if origin then
+		cmd = cmd .. string.format(" ADDR=0x%08X", origin)
+	end
+	if bss then
+		cmd = cmd .. string.format(" BSS=0x%08X", bss)
+	end
 	print(cmd)
 	os.execute(cmd.." || pause")
 
@@ -225,10 +230,10 @@ local function allocateRam(origin, length)
 	end
 
 	-- C言語のソースコードからモジュールを作成
-	function ram:createModule(path)
+	function ram:createModule(path, bss)
 		local startAddr = self.origin
 		local mb = {}
-		local lib = cc(path, startAddr)
+		local lib = cc(path, startAddr, bss)
 
 		-- モジュール本体のサイズ分 RAMを進める (配置重複防止)
 		self:allocate(#lib.bin * 4, path .. " (Main Body)")

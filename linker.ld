@@ -49,7 +49,7 @@ SECTIONS {
         しかし、実行時にはメモリ領域を占有する。
         初期化はスタートアップコードで手動で行う必要がある。
     */
-    .bss : {
+    .bss DEFINED(BSS_ADDR) ? BSS_ADDR : . : {
         __bss_start = . ;
         *(.bss)
         *(.bss.*)

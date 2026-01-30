@@ -25,6 +25,11 @@ ARCH        := -mcpu=arm946e-s -march=armv5te -marm
 CFLAGS      := $(ARCH) -Os -ffreestanding -fomit-frame-pointer -Wall -Wextra -Werror -fno-strict-aliasing
 LDFLAGS     := $(ARCH) -nostartfiles -nostdlib -T linker.ld -Wl,-Map,$(BUILD)/$(NAME).map -Wl,--defsym=START_ADDR=$(ADDR)
 
+# BSS変数が設定されている場合、BSS_ADDRシンボルを定義
+ifdef BSS
+    LDFLAGS += -Wl,--defsym=BSS_ADDR=$(BSS)
+endif
+
 # --- ビルドロール ---
 .PHONY: all clean
 
