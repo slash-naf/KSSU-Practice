@@ -32,6 +32,15 @@ enum SavOption{
 	SavOption_MUSIC_RESET = 0x1,	//曲リセットするか
 };
 
+//ゲームモードとセーブスロットごとのQSQLでロードする情報
+#define GameModeLen 12
+#define SaveSlotLen 9
+typedef struct {
+	Sav slots[SaveSlotLen];
+	uint8_t index;
+} SaveGroup;
+SaveGroup saveGroups[GameModeLen];
+
 //遷移時に保持するQSQLでロードする情報
 Sav tmp_sav;
 
@@ -63,10 +72,6 @@ uint32_t mix_cnt;
 // 下画面に表示させる4桁の数値4つ
 uint32_t show[4];
 
-//ゲームモードとセーブスロットごとのQSQLでロードする情報
-uint8_t indexes[12];
-Sav sav[12][9];
-
 const uint32_t RoMK_positions[7] = {0x01D10956, 0x00690034, 0x008102F4, 0x0099051E, 0x00180030, 0x002400D4, 0x009C002C};
 const uint8_t abilities_for_save[9] = {
 	JET,	//ニュートラル
@@ -80,8 +85,16 @@ const uint8_t abilities_for_save[9] = {
 	HAMMER,	//下
 };
 
+//十字キーの入力に応じた8方向と無入力の9通りの値を得る
+static inline int getArrow(void){
+	int arrow = (heldButtons & 0xF0) >> 4;
+	if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
+	return arrow;
+}
+
 void QS(void){
-	Sav* s = &sav[gameMode][indexes[gameMode]];
+	SaveGroup* g = &saveGroups[gameMode];
+	Sav* s = &g->slots[g->index];
 	Sav* t = &tmp_sav;
 
 	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
@@ -226,34 +239,33 @@ void QS(void){
 		//ポーズ時にYで、QS用に保持した座標を上書き
 		if(Y & pressedButtons){
 			t->sav_pos = getPos;
-		}
-
-		//十字キーの入力に応じた8方向と無入力の9通りの値を得る
-		int arrow = (heldButtons & 0xF0) >> 4;
-		if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
-		//ポーズ時にXで、QS用に保持した能力を上書き
-		if(X & pressedButtons){
-			//十字キーによる能力選択
-			((uint8_t*)(&t->sav_playerStates))[3] = abilities_for_save[arrow];
-		}
-		//ポーズ時にLでQS
-		if(L & pressedButtons){
-			//セーブスロット選択
-			indexes[gameMode] = arrow;
-			s = &sav[gameMode][arrow];
-
-			*s = *t;
-
-			//ほおばりのセーブ
-			sav_inhale1 = 0;
-			if(playerForm == Form_INHALE){
-				sav_inhale1 = playerInhale1;
-				sav_inhale2 = playerInhale2;
+		}else{
+			//十字キーの入力に応じた8方向と無入力の9通りの値を得る
+			int arrow = getArrow();
+			//ポーズ時にXで、QS用に保持した能力を上書き
+			if(X & pressedButtons){
+				//十字キーによる能力選択
+				((uint8_t*)(&t->sav_playerStates))[3] = abilities_for_save[arrow];
 			}
-		}
-		//ポーズ時にRでロードのモードを設定
-		if(R & pressedButtons){
-			loadOptions = heldButtons;
+			//ポーズ時にLでQS
+			else if(L & pressedButtons){
+				//セーブスロット選択
+				g->index = arrow;
+				s = &g->slots[arrow];
+
+				*s = *t;
+
+				//ほおばりのセーブ
+				sav_inhale1 = 0;
+				if(playerForm == Form_INHALE){
+					sav_inhale1 = playerInhale1;
+					sav_inhale2 = playerInhale2;
+				}
+			}
+			//ポーズ時にRでロードのモードを設定
+			else if(R & pressedButtons){
+				loadOptions = heldButtons;
+			}
 		}
 		break;
 	case STATE_PLAY:
@@ -288,7 +300,8 @@ void QL(void){
 		return;
 	}
 
-	Sav* s = &sav[gameMode][indexes[gameMode]];
+	SaveGroup* g = &saveGroups[gameMode];
+	Sav* s = &g->slots[g->index];
 
 	//場面別の処理
 	switch(gameState){
@@ -299,15 +312,12 @@ void QL(void){
 		if(L & pressedButtons){
 			//セーブスロット選択
 			if(R & heldButtons){
-				//十字キーの入力に応じた8方向と無入力の9通りの値を得る
-				int arrow = (heldButtons & 0xF0) >> 4;
-				if(arrow > 8){arrow = (0b0111 << 9) >> arrow;}
-
-				Sav* selSav = &sav[gameMode][arrow];
+				int arrow = getArrow();
+				Sav* selSav = &g->slots[arrow];
 				//QSされてなければ何もしない
 				if(selSav->sav_gameStates != 0){
 					loadSav = LoadSav_QL;
-					indexes[gameMode] = arrow;
+					g->index = arrow;
 					s = selSav;
 				}
 			}
