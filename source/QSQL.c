@@ -1,5 +1,37 @@
 #include "symbols.h"
 
+//QSQLでロードする情報
+typedef struct {
+	//ゲーム状態
+	uint32_t sav_gameStates;
+
+	//座標
+	uint32_t sav_pos;
+	//ワープスターに乗っているかやゴールゲーム中かなど
+	uint32_t sav_playerMode;
+	//無敵キャンディ
+	uint16_t sav_playerInvincibility;
+
+	//プレイヤー・ヘルパー
+	uint8_t sav_playerRiding;
+	uint8_t sav_helperRode;
+	uint32_t sav_playerStates;
+	uint32_t sav_helperStates;
+
+	//銀河
+	uint32_t sav_mww_abilities;
+	uint8_t sav_mww_selectedAbility;
+
+	//格闘王
+	uint8_t sav_arena_boss;
+
+	//ビットフラグ
+	uint16_t options;
+} Sav;
+enum SavOption{
+	SavOption_MUSIC_RESET = 0x1,	//曲リセットするか
+};
+
 //遷移時に保持するQSQLでロードする情報
 Sav tmp_sav;
 
@@ -12,12 +44,24 @@ uint32_t prevMusic;
 
 //ロードのモード
 uint16_t loadOptions;
+enum LoadOption{
+	LoadOption_LOOP = LEFT,
+	LoadOption_REDO = RIGHT,
+};
 
 //Savのロードの状態
 uint8_t loadSav;
+enum LoadSav{
+	LoadSav_NONE = 0,
+	LoadSav_OVERRIDE = 1,
+	LoadSav_QL = 2,
+};
 
 //MixView用のカウンター
 uint32_t mix_cnt;
+
+// 下画面に表示させる4桁の数値4つ
+uint32_t show[4];
 
 //ゲームモードとセーブスロットごとのQSQLでロードする情報
 uint8_t indexes[12];
@@ -396,4 +440,38 @@ void ArenaImageSwitcher(int mode){
 //ミックスルーレット中に毎フレーム実行されるカウントアップ処理
 void MixStep(void){
     mix_cnt++;
+}
+
+//残機描画関数(0x02090D48)の中身を書き換えて、show配列の数値を下画面に描画する
+extern void draw_image(int a, int img, int b, int x, int y, int c);
+#define NUMBER_IMAGES 0x021E2668
+void DrawNumbers(int some_addr, int x_pos, int y_pos, int lives_){
+	(void)some_addr; (void)x_pos; (void)lives_;
+	int x = 0x3C - 19;
+
+	for(int i = 0; i < 4; i++){
+		unsigned int num = show[i];
+
+		//numが4桁を超える場合は9999
+		unsigned int digit = 10000;
+		if(num >= digit){
+			num = digit - 1;
+		}
+		//各桁の描画
+		do{
+			digit = (digit * 205) >> 11;	//digit /= 10
+
+			int img = NUMBER_IMAGES;
+			while(num >= digit){
+				num -= digit;
+				img += 8;
+			}
+
+			draw_image(0x78, img, 0, x, y_pos, 1);
+
+			x += 10;
+		}while(digit > 1);
+
+		x += 8;
+	}
 }

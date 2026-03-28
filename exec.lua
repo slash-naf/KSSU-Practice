@@ -18,6 +18,18 @@ QSQL:if_eq(0x0206B6A0, 0xA2400C21)
 :write32(0x0206B6BC, 0xE1A00000)
 :end_if()
 
+--数値描画
+QSQL:redirect(QSQL.symbols["DrawNumbers"], 0x02090D48, 0xE92D41F0)
+--スコア・ゴールドを消す
+QSQL:disable(0x020904C8, 0xE92D4FF8)
+--タイマーを消す
+QSQL:disable(0x020905A4, 0xE92D41F0)
+--vs～を消す
+QSQL:if_eq(0x0208E7E4, 0xE59010C8)
+:write32(0x0208E7E4, 0xE3A01000)	--ldr r1, [r0, #C8]	->	mov r1, 0
+:end_if()
+
+
 print(QSQL:toString("QSQL"))
 
 gui.register(function()

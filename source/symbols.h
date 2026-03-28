@@ -153,47 +153,4 @@ enum Pos{
 #define pressedButtons          (*(uint16_t*)0x02041E68)   // 押したボタンに対応するビットが1になる
 #define buttons                 (*(uint16_t*)0x04000130)    // 押しているボタンに対応するビットが0になる
 
-//自作
-#define show                    ((uint32_t*)0x02090DD8)     // 下画面に表示させる4桁の数値4つ
-typedef struct {//QSQLでロードする情報
-	//ゲーム状態
-	uint32_t sav_gameStates;
-
-	//座標
-	uint32_t sav_pos;
-	//ワープスターに乗っているかやゴールゲーム中かなど
-	uint32_t sav_playerMode;
-	//無敵キャンディ
-	uint16_t sav_playerInvincibility;
-
-	//プレイヤー・ヘルパー
-	uint8_t sav_playerRiding;
-	uint8_t sav_helperRode;
-	uint32_t sav_playerStates;
-	uint32_t sav_helperStates;
-
-	//銀河
-	uint32_t sav_mww_abilities;
-	uint8_t sav_mww_selectedAbility;
-
-	//格闘王
-	uint8_t sav_arena_boss;
-
-	//何か
-	uint16_t options;
-} Sav;
-//定数
-enum SavOption{
-	SavOption_MUSIC_RESET = 0x1,
-};
-enum LoadOption{
-	LoadOption_LOOP = LEFT,
-	LoadOption_REDO = RIGHT,
-};
-enum LoadSav{
-	LoadSav_NONE = 0,
-	LoadSav_OVERRIDE = 1,
-	LoadSav_QL = 2,
-};
-
 #endif // SYMBOLS_H

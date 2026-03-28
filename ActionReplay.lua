@@ -146,6 +146,8 @@ end
 -- ARM32機械語定数・生成関数
 local push = 0xE92D5FFF -- stmdb r13!,{r0-r12,r14}; レジスタの退避
 local pop = 0xE8BD5FFF  -- ldmia r13!,{r0-r12,r14}; レジスタの復元
+local nop = 0xE1A00000 --nop(mov r0,r0)
+local ret = 0xE12FFF1E --bx r14
 
 local function jump(currentAddr, targetAddr)	-- startAddr: b targetAddr; ジャンプ処理
 	return 0xEA000000 + bit.band(0x00FFFFFF, bit.rshift(targetAddr - currentAddr, 2) - 2)
@@ -231,6 +233,18 @@ function CodeObject:override(targetFunc, originalAddr, originalCode, ret)
 
 	self:end_if()
 	return self
+end
+-- 処理を転送
+function CodeObject:redirect(targetFunc, originalAddr, originalCode)
+	self:if_eq(originalAddr, originalCode)
+	:write32(originalAddr, jump(originalAddr, targetFunc))
+	:end_if()
+end
+-- 関数を無効化
+function CodeObject:disable(originalAddr, originalCode)
+	self:if_eq(originalAddr, originalCode)
+	:write32(originalAddr, ret)
+	:end_if()
 end
 
 
