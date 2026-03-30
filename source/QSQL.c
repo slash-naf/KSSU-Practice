@@ -219,20 +219,11 @@ void QS(void){
 				}
 				break;
 			}
-		}
-		//ポーズ時にYで、QS用に保持した座標を上書き
-		if(Y & pressedButtons){
-			t->sav_pos = getPos;
 		}else{
 			//十字キーの入力に応じた8方向と無入力の9通りの値を得る
 			int arrow = getArrow();
-			//ポーズ時にXで、QS用に保持した能力を上書き
-			if(X & pressedButtons){
-				//十字キーによる能力選択
-				((uint8_t*)(&t->sav_playerStates))[3] = abilities_for_save[arrow];
-			}
 			//ポーズ時にLでQS
-			else if(L & pressedButtons){
+			if(L & pressedButtons){
 				//セーブスロット選択
 				g->index = arrow;
 				g->slots[arrow] = *t;
@@ -277,7 +268,7 @@ void QL(void){
 	if(ql){return;}
 
 	SaveGroup* g = &saveGroups[gameMode];
-	Sav* s;
+	Sav* s = &tmp_sav;
 
 	//場面別の処理
 	switch(gameState){
@@ -286,12 +277,27 @@ void QL(void){
 	case STATE_PLAY:
 		//通常時にLでQL
 		if(L & pressedButtons){
-			//セーブスロット選択
 			if(R & heldButtons){
+				//十字キーの入力に応じた8方向と無入力の9通りの値を得る
 				int arrow = getArrow();
-				s = &g->slots[arrow];
-				if(s->sav_gameStates == 0){return;}
-				g->index = arrow;
+				//Xで能力上書き
+				if(X & heldButtons){
+					//十字キーによる能力選択
+					((uint8_t*)(&s->sav_playerStates))[3] = abilities_for_save[arrow];
+				//Yで座標上書き
+				}else if(Y & heldButtons){
+					s->sav_pos = getPos;
+				}
+				//Rでセーブスロット選択
+				else{
+					s = &g->slots[arrow];
+					if(s->sav_gameStates == 0){return;}
+					g->index = arrow;
+				}
+			}
+			//Y押しながらで一時セーブをQL
+			else if(Y & heldButtons){
+				break;
 			}
 			//QSされていればQL
 			else{
