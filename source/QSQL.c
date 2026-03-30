@@ -43,6 +43,7 @@ SaveGroup saveGroups[GameModeLen];
 
 //遷移時に保持するQSQLでロードする情報
 Sav tmp_sav;
+Sav prev_sav;
 //QL中のSav
 Sav* ql;
 
@@ -90,6 +91,8 @@ void QS(void){
 	if(getPos == 0 || getPos == POS_IN_CORKBOARD){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
+			prev_sav = *t;
+
 			t->sav_pos = 0;
 			prevMusic = music;
 			if(ql){
@@ -273,7 +276,7 @@ void QL(void){
 	//場面別の処理
 	switch(gameState){
 	case STATE_PAUSE:
-		return;;
+		return;
 	case STATE_PLAY:
 		//通常時にLでQL
 		if(L & pressedButtons){
@@ -294,16 +297,23 @@ void QL(void){
 					if(s->sav_gameStates == 0){return;}
 					g->index = arrow;
 				}
-			}
-			//Y押しながらで一時セーブをQL
-			else if(Y & heldButtons){
-				break;
-			}
-			//QSされていればQL
-			else{
-				s = &g->slots[g->index];
+			}else{
+				//Y押しながらで前の一時セーブをQL
+				if(Y & heldButtons){
+					s = &prev_sav;
+				}
+				//QSされていればQL
+				else{
+					s = &g->slots[g->index];
+				}
 				if(s->sav_gameStates == 0){return;}
 			}
+		}
+		//Y押しながらRで一時セーブをQL
+		else if(R & pressedButtons){
+			if(Y & heldButtons){
+				break;
+			}else{return;}
 		}else{return;}
 		break;
 	default:
