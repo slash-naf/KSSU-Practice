@@ -43,6 +43,8 @@ SaveGroup saveGroups[GameModeLen];
 
 //遷移時に保持するQSQLでロードする情報
 Sav tmp_sav;
+//QL中のSav
+Sav* ql;
 
 //ほおばりのセーブ
 uint32_t sav_inhale1;
@@ -50,21 +52,6 @@ uint32_t sav_inhale2;
 
 //曲が変わったかの監視用
 uint32_t prevMusic;
-
-//ロードのモード
-uint16_t loadOptions;
-enum LoadOption{
-	LoadOption_LOOP = LEFT,
-	LoadOption_REDO = RIGHT,
-};
-
-//Savのロードの状態
-uint8_t loadSav;
-enum LoadSav{
-	LoadSav_NONE = 0,
-	LoadSav_OVERRIDE = 1,
-	LoadSav_QL = 2,
-};
 
 //MixView用のカウンター
 uint32_t mix_cnt;
@@ -94,7 +81,6 @@ static inline int getArrow(void){
 
 void QS(void){
 	SaveGroup* g = &saveGroups[gameMode];
-	Sav* s = &g->slots[g->index];
 	Sav* t = &tmp_sav;
 
 	//マキシムトマト、むてきキャンディ、1UPなどの、ステージを出ないと復活しないアイテムがフロアのロードで復活するようになる
@@ -106,11 +92,9 @@ void QS(void){
 		if(t->sav_pos != 0){
 			t->sav_pos = 0;
 			prevMusic = music;
-			if(loadSav != LoadSav_NONE){
-				playerInvincibility = s->sav_playerInvincibility;	//無敵キャンディ時間をロード
-				if(loadSav == LoadSav_QL){
-					timer = 0;	//タイマーリセット
-				}
+			if(ql){
+				playerInvincibility = ql->sav_playerInvincibility;	//無敵キャンディ時間をロード
+				timer = 0;	//タイマーリセット
 			}else{
 				//無敵キャンディ時間を保持
 				t->sav_playerInvincibility = playerInvincibility;
@@ -119,7 +103,7 @@ void QS(void){
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
 		if(t->sav_pos == 0){	
-			loadSav = LoadSav_NONE;
+			ql = 0;
 
 			//フロア遷移時の座標と状態
 			t->sav_pos = getPos;	//フロア遷移時の初期座標を保持
@@ -251,9 +235,7 @@ void QS(void){
 			else if(L & pressedButtons){
 				//セーブスロット選択
 				g->index = arrow;
-				s = &g->slots[arrow];
-
-				*s = *t;
+				g->slots[arrow] = *t;
 
 				//ほおばりのセーブ
 				sav_inhale1 = 0;
@@ -261,10 +243,6 @@ void QS(void){
 					sav_inhale1 = playerInhale1;
 					sav_inhale2 = playerInhale2;
 				}
-			}
-			//ポーズ時にRでロードのモードを設定
-			else if(R & pressedButtons){
-				loadOptions = heldButtons;
 			}
 		}
 		break;
@@ -275,7 +253,7 @@ void QS(void){
 		}
 		break;
 	default:
-		if(loadSav == LoadSav_QL){
+		if(ql){
 			show[0] = 0;
 		}else{
 			int n = timer - show[0];	//区間タイム
@@ -296,52 +274,40 @@ void QS(void){
 
 void QL(void){
 	//既にQS情報をロード中なら
-	if(loadSav != LoadSav_NONE){
-		return;
-	}
+	if(ql){return;}
 
 	SaveGroup* g = &saveGroups[gameMode];
-	Sav* s = &g->slots[g->index];
+	Sav* s;
 
 	//場面別の処理
 	switch(gameState){
 	case STATE_PAUSE:
-		break;
+		return;;
 	case STATE_PLAY:
 		//通常時にLでQL
 		if(L & pressedButtons){
 			//セーブスロット選択
 			if(R & heldButtons){
 				int arrow = getArrow();
-				Sav* selSav = &g->slots[arrow];
-				//QSされてなければ何もしない
-				if(selSav->sav_gameStates != 0){
-					loadSav = LoadSav_QL;
-					g->index = arrow;
-					s = selSav;
-				}
-			}
-			//ロードのモードがLOOP(左)かREDO(右)ならそのフロアに遷移した状態をQLする
-			else if(loadOptions & (LoadOption_LOOP | LoadOption_REDO)){
-				loadSav = LoadSav_QL;
-				s = &tmp_sav;
+				s = &g->slots[arrow];
+				if(s->sav_gameStates == 0){return;}
+				g->index = arrow;
 			}
 			//QSされていればQL
-			else if(s->sav_gameStates != 0){
-				loadSav = LoadSav_QL;
+			else{
+				s = &g->slots[g->index];
+				if(s->sav_gameStates == 0){return;}
 			}
-		}
+		}else{return;}
 		break;
 	default:
-		//ロードのモードを左で設定したらそのフロアに遷移した状態へループさせる
-		if(loadOptions & LoadOption_LOOP){
-			loadSav = LoadSav_OVERRIDE;
-			s = &tmp_sav;
-		}
+		return;
 	}
 
 	//ロード
-	if(loadSav != LoadSav_NONE){
+	{
+		ql = s;
+
 		//HPと残機を最大に
 		playerHP = playerMaxHP;
 		helperHP = helperMaxHP;
