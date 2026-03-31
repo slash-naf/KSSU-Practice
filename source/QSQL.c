@@ -181,9 +181,10 @@ void QS(void){
 
 	//ダイナのスイッチがステージに入ってるときはあってステージ選択画面ではおためし部屋があるようにする
 	if(gameMode == DYNA_BLADE){
-		db_switches = 0;
 		if(gameState > 1){
 			db_switches = 3;
+		}else{
+			db_switches = 0;
 		}
 	}
 
@@ -246,10 +247,11 @@ void QS(void){
 				g->slots[arrow] = *t;
 
 				//ほおばりのセーブ
-				sav_inhale1 = 0;
 				if(playerForm == Form_INHALE){
 					sav_inhale1 = playerInhale1;
 					sav_inhale2 = playerInhale2;
+				}else{
+					sav_inhale1 = 0;
 				}
 			}
 			//Xで解除
