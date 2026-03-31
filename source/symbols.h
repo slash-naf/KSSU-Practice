@@ -19,16 +19,16 @@ enum Button{
 };
 
 enum GameState{
-	STATE_PLAY         = 0,
-	STATE_FLOOR_LOAD   = 1,
-	STATE_STAGE_CLEAR  = 2,
-	STATE_GAME_CLEAR   = 3,
-	STATE_DIE          = 4,
-	STATE_SPECIAL      = 5,
+	STATE_PLAY         = 0,	//アクションパート
+	STATE_FLOOR_LOAD   = 1,	//フロア切り替え
+	STATE_STAGE_CLEAR  = 2,	//ステージ切り替え、マップへの遷移
+	STATE_GAME_CLEAR   = 3,	//ゲームクリア
+	STATE_DIE          = 4,	//死亡
+	STATE_SPECIAL      = 5,	//はるかぜとともにと大王の逆襲でムービーから通常画面への切り替え。ダイナブレイドでゴールゲームへ遷移。銀河にねがいをで夢の泉へ遷移。
 	STATE_ARENA_PROCEED= 5,
 	STATE_MAP          = 6,
 	STATE_ARENA_MATCH  = 6,
-	STATE_SWITCH       = 7,
+	STATE_SWITCH       = 7,	//ダイナブレイドのスイッチを押した演出
 	STATE_SHORT_MOVIE  = 9,
 	STATE_PAUSE        = 0xB,
 };

@@ -1,4 +1,5 @@
 #include "symbols.h"
+#include <stdint.h>
 
 //QSQLでロードする情報
 typedef struct {
@@ -46,6 +47,16 @@ Sav tmp_sav;
 Sav prev_sav;
 //QL中のSav
 Sav* ql;
+
+//ロードのリダイレクトの設定
+uint8_t redirect;
+enum Redirect{
+	Redirect_Loop = 2,	//左
+	Redirect_QL = 6,	//左上
+	Redirect_Random = 4,	//上
+	Redirect_Recommend = 5,	//右上
+};
+int32_t prevTimer;
 
 //ほおばりのセーブ
 uint32_t sav_inhale1;
@@ -97,7 +108,10 @@ void QS(void){
 			prevMusic = music;
 			if(ql){
 				playerInvincibility = ql->sav_playerInvincibility;	//無敵キャンディ時間をロード
-				timer = 0;	//タイマーリセット
+
+				//タイマーリセット
+				timer = 0;
+				prevTimer = 0;
 			}else{
 				//無敵キャンディ時間を保持
 				t->sav_playerInvincibility = playerInvincibility;
@@ -238,6 +252,14 @@ void QS(void){
 					sav_inhale2 = playerInhale2;
 				}
 			}
+			//Xで解除
+			else if(X & pressedButtons){
+				g->slots[arrow].sav_gameStates = 0;
+			}
+			//Rでロードのリダイレクトの設定
+			else if(R & pressedButtons){
+				redirect = arrow;
+			}
 		}
 		break;
 	case STATE_PLAY:
@@ -247,10 +269,11 @@ void QS(void){
 		}
 		break;
 	default:
-		if(ql){
+		if(prevTimer == -1){
 			show[0] = 0;
 		}else{
-			int n = timer - show[0];	//区間タイム
+			int n = timer - prevTimer;	//区間タイム
+			prevTimer = timer;
 			if(n > 0){
 				show[0] = timer;	//表示タイムの更新
 				//区間タイム
@@ -293,9 +316,8 @@ void QL(void){
 				}
 				//Rでセーブスロット選択
 				else{
-					s = &g->slots[arrow];
-					if(s->sav_gameStates == 0){return;}
 					g->index = arrow;
+					goto QL_SLOT;
 				}
 			}else{
 				//Y押しながらで前の一時セーブをQL
@@ -304,24 +326,48 @@ void QL(void){
 				}
 				//QSされていればQL
 				else{
+				QL_SLOT:
 					s = &g->slots[g->index];
 				}
-				if(s->sav_gameStates == 0){return;}
 			}
 		}
 		//Y押しながらRで一時セーブをQL
 		else if(R & pressedButtons){
 			if(Y & heldButtons){
-				break;
+
 			}else{return;}
 		}else{return;}
+		prevTimer = -1;	//redirectではないQLによるタイマーリセット
 		break;
+	case STATE_STAGE_CLEAR:
+	case STATE_GAME_CLEAR:
+	case STATE_MAP:
+		if(redirect == Redirect_Random){
+			int a[9];
+			int len = 0;
+			for(int i=0; i < 9; i++){
+				if(g->slots[i].sav_gameStates != 0){
+					a[len] = i;
+					len++;
+				}
+			}
+			g->index = a[seed * len >> 12];
+			goto REDIRECT_TO_SLOT;
+		}
+		else if(redirect == Redirect_QL){
+		REDIRECT_TO_SLOT:
+			s = &g->slots[g->index];
+			break;
+		}
+		[[fallthrough]];
 	default:
+		if(redirect == Redirect_Loop){break;}
 		return;
 	}
 
 	//ロード
 	{
+		if(s->sav_gameStates == 0){return;}
 		ql = s;
 
 		//HPと残機を最大に
