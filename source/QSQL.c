@@ -45,18 +45,18 @@ SaveGroup saveGroups[GameModeLen];
 //遷移時に保持するQSQLでロードする情報
 Sav tmp_sav;
 Sav prev_sav;
-//QL中のSav
+//QL中のSav (NULLならQL中ではない)
 Sav* ql;
 
-//ロードのリダイレクトの設定
+//ロードのリダイレクトの設定 (ポーズ中に十字+Rで設定、フロア遷移時に自動QLする)
 uint8_t redirect;
 enum Redirect{
-	Redirect_Loop = 2,	//左
-	Redirect_QL = 6,	//左上
-	Redirect_Random = 4,	//上
-	Redirect_Recommend = 5,	//右上
+	Redirect_Loop = 2,	//左: フロア遷移ごとに一時セーブでQL(ループ)
+	Redirect_QL = 6,	//左上: ステージクリア/マップ遷移時にスロットからQL
+	Redirect_Random = 4,	//上: ステージクリア/マップ遷移時にQS済みスロットからランダムQL
+	Redirect_Recommend = 5,	//右上: (未実装)
 };
-int32_t prevTimer;
+int32_t prevTimer;	//-1: 次の遷移でshow[0]をリセットする
 
 //ほおばりのセーブ
 uint32_t sav_inhale1;
@@ -291,12 +291,20 @@ void QS(void){
 	}
 }
 
+// プレイ中の操作:
+//   L:          セーブスロットからQL
+//   R+十字+L:   十字で指定したスロットからQL
+//   R+X+十字+L: 一時セーブの能力を変更してQL
+//   R+Y+L:      一時セーブの座標を現在の座標に変更してQL
+//   Y+L:        前の一時セーブ(prev_sav)からQL
+//   Y+R:        一時セーブからQL
+// フロア遷移時の自動QL: redirect設定に応じて自動的にQLする
 void QL(void){
 	//既にQS情報をロード中なら
 	if(ql){return;}
 
 	SaveGroup* g = &saveGroups[gameMode];
-	Sav* s = &tmp_sav;
+	Sav* s = &tmp_sav;	//デフォルトのQL対象は一時セーブ
 
 	//場面別の処理
 	switch(gameState){
@@ -336,24 +344,26 @@ void QL(void){
 		//Y押しながらRで一時セーブをQL
 		else if(R & pressedButtons){
 			if(Y & heldButtons){
-
+				//何もしない: sは&tmp_savのまま落ちてロードされる
 			}else{return;}
 		}else{return;}
 		prevTimer = -1;	//redirectではないQLによるタイマーリセット
 		break;
+	//リダイレクト: ステージクリア・マップ遷移時の自動QL (STATE_MAP == STATE_ARENA_MATCHなので格闘王系でも発動しうる)
 	case STATE_STAGE_CLEAR:
 	case STATE_GAME_CLEAR:
 	case STATE_MAP:
 		if(redirect == Redirect_Random){
-			int a[9];
+			//QS済みスロットを列挙してランダムに選択
+			int a[SaveSlotLen];
 			int len = 0;
-			for(int i=0; i < 9; i++){
+			for(int i=0; i < SaveSlotLen; i++){
 				if(g->slots[i].sav_gameStates != 0){
 					a[len] = i;
 					len++;
 				}
 			}
-			g->index = a[seed * len >> 12];
+			g->index = a[(seed & 0xFFF) * len >> 12];
 			goto REDIRECT_TO_SLOT;
 		}
 		else if(redirect == Redirect_QL){
@@ -363,6 +373,7 @@ void QL(void){
 		}
 		[[fallthrough]];
 	default:
+		//Redirect_Loop: 全てのフロア遷移時に一時セーブで自動QL
 		if(redirect == Redirect_Loop){break;}
 		return;
 	}
