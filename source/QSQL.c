@@ -349,16 +349,16 @@ void QL(void){
 		}else{return;}
 		prevTimer = -1;	//redirectではないQLによるタイマーリセット
 		break;
-	//リダイレクト: ステージクリア・マップ遷移時の自動QL (STATE_MAP == STATE_ARENA_MATCHなので格闘王系でも発動しうる)
+	//リダイレクト: ステージクリア・マップ遷移時の自動QL (STATE_MAP == STATE_ARENA_MATCHなので格闘王系の戦闘開始時も発動する)
 	case STATE_STAGE_CLEAR:
 	case STATE_GAME_CLEAR:
 	case STATE_MAP:
 		if(redirect == Redirect_Random){
-			//QS済みスロットを列挙してランダムに選択
+			//QS済みスロットを列挙してランダムに選択（現在のスロットは除外）
 			int a[SaveSlotLen];
 			int len = 0;
 			for(int i=0; i < SaveSlotLen; i++){
-				if(g->slots[i].sav_gameStates != 0){
+				if(g->index != i && g->slots[i].sav_gameStates != 0){
 					a[len] = i;
 					len++;
 				}
