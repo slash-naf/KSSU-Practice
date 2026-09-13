@@ -7,11 +7,6 @@ OBJ         := $(BUILD)/$(NAME).o
 BIN         := $(BUILD)/$(NAME).bin
 SYMBOLS     := $(BUILD)/$(NAME).txt
 
-# 環境変数 DEVKITARM が設定されていることを確認
-ifndef DEVKITARM
-    $(error DEVKITARM is not set)
-endif
-
 # コンパイラやツールのコマンド名定義
 PREFIX      := arm-none-eabi-
 CC          := $(PREFIX)gcc
@@ -30,6 +25,16 @@ ifdef BSS
     LDFLAGS += -Wl,--defsym=BSS_ADDR=$(BSS)
 endif
 
+# ビルドパラメータの追跡 (ADDR, BSS の変更検知用)
+PARAMS      := $(BUILD)/$(NAME).params
+PREV_PARAMS := $(shell cat $(PARAMS) 2>/dev/null)
+CURR_PARAMS := ADDR=$(ADDR) BSS=$(BSS)
+
+# パラメータに変更がある場合のみ PARAMS を更新対象にする
+ifneq ($(PREV_PARAMS),$(CURR_PARAMS))
+.PHONY: $(PARAMS)
+endif
+
 # --- ビルドロール ---
 .PHONY: all clean
 
@@ -39,13 +44,17 @@ all: $(BUILD) $(BIN) $(SYMBOLS)
 $(BUILD):
 	@mkdir -p $@
 
+# パラメータファイルの更新
+$(PARAMS): | $(BUILD)
+	@echo "$(CURR_PARAMS)" > $@
+
 # コンパイル
 $(OBJ): $(SRC)
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-# リンク
-$(BUILD)/$(NAME).elf: $(OBJ)
+# リンク (コード変更時・リンカ変更時・アドレス変更時に再リンク)
+$(BUILD)/$(NAME).elf: $(OBJ) linker.ld $(PARAMS)
 	@echo "Linking $(NAME) at $(ADDR)..."
 	@$(LD) $(LDFLAGS) $< -o $@
 
