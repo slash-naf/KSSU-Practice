@@ -68,6 +68,9 @@ uint32_t prevMusic;
 //MixView用のカウンター
 uint32_t mix_cnt;
 
+//乱数カウンタのリセット用ポインタ (seed_advancesモジュール使用時に設定)
+uint32_t* p_seed_advances;
+
 // 下画面に表示させる4桁の数値4つ
 uint32_t show[4];
 
@@ -112,6 +115,11 @@ void QS(void){
 				//タイマーリセット
 				timer = 0;
 				prevTimer = 0;
+
+				//乱数カウンタのリセット
+				if(p_seed_advances){
+					*p_seed_advances = 0;
+				}
 			}else{
 				//無敵キャンディ時間を保持
 				t->sav_playerInvincibility = playerInvincibility;
@@ -271,6 +279,9 @@ void QS(void){
 		}
 		break;
 	default:
+		//乱数監視モジュール有効時はタイム更新を行わない
+		if(p_seed_advances){break;}
+
 		if(prevTimer == -1){
 			show[0] = 0;
 		}else{

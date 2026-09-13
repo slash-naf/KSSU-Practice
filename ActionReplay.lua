@@ -217,17 +217,17 @@ end
 
 
 -- 処理を上書き
-function CodeObject:override(targetFunc, originalAddr, originalCode, ret)
+function CodeObject:override(targetFunc, originalAddr, originalCode, retInfo)
 	self:if_eq(originalAddr, originalCode)
 	:write32(originalAddr, call(originalAddr, targetFunc))
 
 	-- 戻り処理の追加
-	if ret then
+	if retInfo then
 		local addr = originalAddr + 4
-		if ret < 0x10000000 then	-- アドレス指定の場合: そのアドレスへジャンプ
-			self:write32(addr, jump(addr, ret))
+		if retInfo < 0x10000000 then	-- アドレス指定の場合: そのアドレスへジャンプ
+			self:write32(addr, jump(addr, retInfo))
 		else	-- 命令指定の場合: その命令を実行
-			self:write32(addr, ret)
+			self:write32(addr, retInfo)
 		end
 	end
 
@@ -245,6 +245,13 @@ function CodeObject:disable(originalAddr, originalCode)
 	self:if_eq(originalAddr, originalCode)
 	:write32(originalAddr, ret)
 	:end_if()
+end
+-- 関数呼び出しを差し替え
+function CodeObject:replaceCall(originalAddr, oldTarget, newTarget)
+	self:if_eq(originalAddr, call(originalAddr, oldTarget))
+	:write32(originalAddr, call(originalAddr, newTarget))
+	:end_if()
+	return self
 end
 
 
@@ -305,8 +312,8 @@ local function allocateRam(codeAddr, bssAddr, endAddr)
 		-- funcName: モジュール内の関数名
 		-- hookAddr: フックを挿入するゲーム側のメモリアドレス
 		-- originalCode: フック等の上書きで消えてしまう元の命令
-		-- ret: フック後の戻り先 (nilなら直後へ, アドレスならそこへジャンプ, 命令ならそれを実行)
-		function mb:hook(funcName, hookAddr, originalCode, ret)
+		-- retInfo: フック後の戻り先 (nilなら直後へ, アドレスならそこへジャンプ, 命令ならそれを実行)
+		function mb:hook(funcName, hookAddr, originalCode, retInfo)
 			--関数のアドレス
 			local targetAddr = self.symbols[funcName]
 			if not targetAddr then error("Symbol not found: " .. funcName) end
@@ -321,11 +328,11 @@ local function allocateRam(codeAddr, bssAddr, endAddr)
 			}
 			
 			-- 戻り処理の追加
-			if ret then
-				if ret < 0x10000000 then	-- アドレス指定の場合: そのアドレスへジャンプ
-					table.insert(trampoline, jump(trampolineAddr + #trampoline * 4, ret))
+			if retInfo then
+				if retInfo < 0x10000000 then	-- アドレス指定の場合: そのアドレスへジャンプ
+					table.insert(trampoline, jump(trampolineAddr + #trampoline * 4, retInfo))
 				else	-- 命令指定の場合: その命令を実行
-					table.insert(trampoline, ret)
+					table.insert(trampoline, retInfo)
 				end
 			else
 				-- 指定なしの場合: 元の命令を実行してから、フック地点の次の命令へ戻る
