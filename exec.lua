@@ -42,14 +42,28 @@ local seedMod = ram:createModule("seed_advances.c")
 	:hook("UpdateRNG", 0x020B5804, 0xEA000006, 0x020B5824)	--ポピーブロスJr.自爆タイマー設定時に表示更新
 local MonitorRNG = ar.newCode():import(seedMod)
 
---QL時に乱数カウンタをリセットするようにポインタを設定
-MonitorRNG:write32(qsqlMod.symbols["p_seed_advances"], seedMod.symbols["advances"])
+--QL時に乱数リセット関数を呼び出すように関数ポインタを設定
+MonitorRNG:write32(qsqlMod.symbols["p_reset_rng"], seedMod.symbols["ResetRNG"])
 --表示先をQSQLのshow配列に設定
 MonitorRNG:write32(seedMod.symbols["p_show"], qsqlMod.symbols["show"])
 
 
 print(MonitorRNG:toString("Monitor RNG"))
 table.insert(cheats, MonitorRNG)
+
+
+-- ログ出力 (Log Dump)
+local logMod = ram:createModule("log_dump.c")
+	:hook("HookSave", 0x02026BD4, 0xEA000005, 0x02026BF0)	--セーブデータ書き込み処理をフック
+local LogDump = ar.newCode():import(logMod)
+
+--Monitor RNG と Log Dump の連携 (ログ出力チート有効時にポインタを設定)
+LogDump:write32(seedMod.symbols["p_log_buffer"], 0x02F00000)	--バッファ先頭アドレス
+LogDump:write32(seedMod.symbols["log_max_words"], 0x10000)	--64Kワード (256KB)
+
+
+print(LogDump:toString("Log Dump"))
+table.insert(cheats, LogDump)
 
 
 -- 特定乱数の検知チート群 (各呼び出し地点ごとに分割)

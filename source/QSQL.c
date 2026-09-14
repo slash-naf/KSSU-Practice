@@ -70,6 +70,7 @@ uint32_t mix_cnt;
 
 //乱数カウンタのリセット用ポインタ (seed_advancesモジュール使用時に設定)
 uint32_t* p_seed_advances;
+void (*p_reset_rng)(void);
 
 // 下画面に表示させる4桁の数値4つ
 uint32_t show[4];
@@ -117,7 +118,9 @@ void QS(void){
 				prevTimer = 0;
 
 				//乱数カウンタのリセット
-				if(p_seed_advances){
+				if(p_reset_rng){
+					p_reset_rng();
+				}else if(p_seed_advances){
 					*p_seed_advances = 0;
 				}
 			}else{
