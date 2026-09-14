@@ -26,7 +26,7 @@
 
 // OAM アトリビュートビット定義
 #define OBJ_DISABLE     0x0200 // Attr0: 非表示フラグ
-#define GHOST_OBJ_MODE  0x0400 // Attr0: 半透明モード (0x0400: 半透明, 0x0000: 不透明)
+#define OBJ_MODE_NORMAL 0x0000 // Attr0: 通常スプライトモード (不透明)
 #define OBJ_SIZE_16X16  0x4000 // Attr1: 16x16ドット (Shape: Square, Size: 1)
 #define OBJ_PRIORITY_2  0x0800 // Attr2: 表示優先度2 (BG手前、通常スプライト優先度)
 
@@ -47,24 +47,6 @@ typedef struct {
 
 // メインRAM上のShadow OAMバッファ (0x0203F898)
 #define SHADOW_OAM ((volatile OAMEntry*)0x0203F898)
-
-// GPU ブレンドレジスタ (Main Engine 2D)
-// ゲーム本体のVBlankハンドラがShadowバッファからハードウェアI/Oへ一括転送しているため両方に定義
-#define REG_BLDCNT       (*(volatile uint16_t*)0x04000050)
-#define REG_BLDALPHA      (*(volatile uint16_t*)0x04000052)
-
-// ゲーム本体のVBlank転送用Shadowレジスタ (ベースアドレス: 0x02041D80)
-// VBlank転送処理(0x02001994-0x020019AC)の解析結果:
-//   0x02041D80 + 0x2A = 0x02041DAA : Shadow BLDCNT (16bit) -> REG_BLDCNT
-//   0x02041D80 + 0x2C = 0x02041DAC : Shadow EVA (下位8bit)
-//   0x02041D80 + 0x2E = 0x02041DAE : Shadow EVB (下位8bit) -> (EVA | (EVB << 8)) -> REG_BLDALPHA
-#define SHADOW_BLDCNT    (*(volatile uint16_t*)0x02041DAA)
-#define SHADOW_BLD_EVA   (*(volatile uint16_t*)0x02041DAC)
-#define SHADOW_BLD_EVB   (*(volatile uint16_t*)0x02041DAE)
-
-// ブレンド設定 (50%半透明: EVA=8, EVB=8、全レイヤーを第2ターゲットに指定)
-#define BLD_2ND_ALL   0x3F00           // BG0〜BG3, OBJ, Backdrop をブレンド対象に指定
-#define BLD_ALPHA_50  ((8 << 8) | 8)   // 第1ターゲット 8/16(50%), 第2ターゲット 8/16(50%)
 
 // ============================================================================
 // 状態変数
@@ -92,21 +74,13 @@ static inline void HideGhost(void){
 // ゴーストスプライトをOAMに設定・表示する (HW_OAM / SHADOW_OAM 両対応)
 static inline void ShowGhost(int screen_x, int screen_y){
 	OAMEntry e = {
-		(uint16_t)((screen_y & 0x00FF) | GHOST_OBJ_MODE),
+		(uint16_t)((screen_y & 0x00FF) | OBJ_MODE_NORMAL),
 		(uint16_t)((screen_x & 0x01FF) | OBJ_SIZE_16X16),
 		(uint16_t)(STAR_TILE_INDEX | (STAR_PAL_INDEX << 12) | OBJ_PRIORITY_2),
 		0
 	};
 	HW_OAM[GHOST_OAM_INDEX]     = e;
 	SHADOW_OAM[GHOST_OAM_INDEX] = e;
-
-	// GPU半透明ブレンド設定 (星50% + 背景50%)
-	// 実機環境ではVBlank時にゲーム側がShadowレジスタから上書き転送するため両方に設定
-	REG_BLDCNT      |= BLD_2ND_ALL;
-	REG_BLDALPHA     = BLD_ALPHA_50;
-	SHADOW_BLDCNT   |= BLD_2ND_ALL;
-	SHADOW_BLD_EVA   = 8;
-	SHADOW_BLD_EVB   = 8;
 }
 
 // ============================================================================
