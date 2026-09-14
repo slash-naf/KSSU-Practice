@@ -57,9 +57,12 @@ local logMod = ram:createModule("log_dump.c")
 	:hook("HookSave", 0x02026BD4, 0xEA000005, 0x02026BF0)	--セーブデータ書き込み処理をフック
 local LogDump = ar.newCode():import(logMod)
 
---Monitor RNG と Log Dump の連携 (ログ出力チート有効時にポインタを設定)
-LogDump:write32(seedMod.symbols["p_log_buffer"], 0x02F00000)	--バッファ先頭アドレス
-LogDump:write32(seedMod.symbols["log_max_words"], 0x10000)	--64Kワード (256KB)
+--Monitor RNG と Log Dump の連携 (ポーズ中にセレクトでログ記録を有効化)
+LogDump:if_eq(0x0205B244, 0x000B, 0x00FF)	--ポーズ中 (gameState == STATE_PAUSE)
+	:if_eq(0x02041E68, 0x0004, 0x0004)	--セレクトボタン押下 (SELECT)
+	:write32(seedMod.symbols["p_log_buffer"], 0x02F00000)	--バッファ先頭アドレス
+	:write32(seedMod.symbols["log_max_words"], 0x10000)	--64Kワード (256KB)
+	:end_if()
 
 
 print(LogDump:toString("Log Dump"))
