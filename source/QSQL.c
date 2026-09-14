@@ -72,6 +72,10 @@ uint32_t mix_cnt;
 uint32_t* p_seed_advances;
 void (*p_reset_rng)(void);
 
+//ゴーストモジュール連携用ポインタ (ghostモジュール使用時に設定)
+void (*p_update_ghost)(void);
+void (*p_reset_ghost)(int);
+
 // 下画面に表示させる4桁の数値4つ
 uint32_t show[4];
 
@@ -123,6 +127,11 @@ void QS(void){
 				}else if(p_seed_advances){
 					*p_seed_advances = 0;
 				}
+
+				//ゴーストリセット (自動ループ: 直前走りをスワップして再生)
+				if(p_reset_ghost){
+					p_reset_ghost(1);
+				}
 			}else{
 				//無敵キャンディ時間を保持
 				t->sav_playerInvincibility = playerInvincibility;
@@ -131,6 +140,10 @@ void QS(void){
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
 		if(t->sav_pos == 0){	
+			//通常のフロア遷移時はゴースト再生をクリアして新規記録開始
+			if(!ql && p_reset_ghost){
+				p_reset_ghost(0);
+			}
 			ql = 0;
 
 			//フロア遷移時の座標と状態
@@ -279,6 +292,11 @@ void QS(void){
 		//はるかぜとともにのステージ冒頭のムービー中とかワープスターに乗ってるときでもポーズできるようにする
 		if((R & heldButtons) && (START & heldButtons)){
 			gameState = STATE_PAUSE;
+		}
+
+		//ゴースト更新 (毎フレームの記録・再生)
+		if(p_update_ghost){
+			p_update_ghost();
 		}
 		break;
 	default:

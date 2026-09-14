@@ -1,6 +1,6 @@
 local ar = require("ActionReplay")
 
-local ram = ar.allocateRam(0x022E0000, 0x022E1000, 0x022E8000)
+local ram = ar.allocateRam(0x022E0000, 0x022E2000, 0x022E8000)
 local cheats = {}
 
 -- QSQL モジュール
@@ -67,6 +67,19 @@ LogDump:if_eq(0x0205B244, 0x000B, 0x00FF)	--ポーズ中 (gameState == STATE_PAU
 
 print(LogDump:toString("Log Dump"))
 table.insert(cheats, LogDump)
+
+
+-- ゴースト (Ghost)
+local ghostMod = ram:createModule("ghost.c")
+local Ghost = ar.newCode():import(ghostMod)
+
+-- QSQL と Ghost の連携 (関数ポインタの設定)
+Ghost:write32(qsqlMod.symbols["p_update_ghost"], ghostMod.symbols["UpdateGhost"])
+Ghost:write32(qsqlMod.symbols["p_reset_ghost"], ghostMod.symbols["ResetGhost"])
+
+
+print(Ghost:toString("Ghost"))
+table.insert(cheats, Ghost)
 
 
 -- 特定乱数の検知チート群 (各呼び出し地点ごとに分割)

@@ -105,6 +105,7 @@ enum Pos{
 #define gameMode                (*(uint8_t*)0x0205B245)
 #define stage                   (*(uint8_t*)0x0205B246)
 #define room                    (*(uint8_t*)0x0205B247)
+#define cameraPos               (*(uint32_t*)0x0205B1FC)    // カメラ座標 (下位16bit: X, 上位16bit: Y)
 #define playerMode              (*(uint32_t*)0x0205B248)    // ワープスターに乗っているかやゴールゲーム中かなど
 #define setPos                  (*(uint32_t*)0x0205B24C)    // フロア遷移時の初期座標の設定
 #define consumedItems           ((uint32_t*)0x0205B270)     // キャンディや1upなどの復活しないアイテムが取られるとこのアドレスから列挙されていく。0を入れれば復活
