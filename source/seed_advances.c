@@ -26,13 +26,13 @@ uint32_t* p_show;
 
 // ログ出力用ポインタ (Log Dumpチート有効時に設定)
 uint32_t* p_log_buffer;
-uint32_t log_max_words;
+#define LOG_MAX_WORDS 0x4000 // ログバッファ容量 (16Kワード = 64KB, log_dump.c の定義と一致)
 
 // ログエントリの記録 (32bit 2ワード、先頭1ワードはログワード数)
 static inline void LogEntry(uint32_t w1, uint32_t w2){
 	if(p_log_buffer){
 		uint32_t count = p_log_buffer[0];
-		if(count + 3 <= log_max_words){
+		if(count + 3 <= LOG_MAX_WORDS){
 			p_log_buffer[count + 1] = w1;
 			p_log_buffer[count + 2] = w2;
 			p_log_buffer[0] = count + 2;

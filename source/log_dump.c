@@ -9,9 +9,9 @@ typedef struct {
 	uint32_t size;        // offset 0x14: 書き込みバイト数
 } SaveContext;
 
-// ログバッファのアドレス (先頭 1 ワードは記録されたログワード数)
-#define LOG_ADDR 0x02F00000
-#define log_buffer ((uint32_t*)LOG_ADDR)
+// ログバッファ本体 (先頭 1 ワードは記録されたログワード数, BSSに配置)
+#define LOG_MAX_WORDS 0x4000 // 16Kワード (64KB, 最大8,191イベント)
+uint32_t log_buffer[LOG_MAX_WORDS];
 
 // ダンプ済みフラグ (1回のセーブ処理で複数回フックが実行されるため、2回目以降の重複書き込みを抑止する)
 int8_t is_dumped;

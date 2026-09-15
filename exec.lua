@@ -1,6 +1,6 @@
 local ar = require("ActionReplay")
 
-local ram = ar.allocateRam(0x022E0000, 0x022E2000, 0x022E8000)
+local ram = ar.allocateRam(0x022C0000, 0x022C2000, 0x02360000)
 local cheats = {}
 
 -- QSQL モジュール
@@ -60,8 +60,7 @@ local LogDump = ar.newCode():import(logMod)
 --Monitor RNG と Log Dump の連携 (ポーズ中にセレクトでログ記録を有効化)
 LogDump:if_eq(0x0205B244, 0x000B, 0x00FF)	--ポーズ中 (gameState == STATE_PAUSE)
 	:if_eq(0x02041E68, 0x0004, 0x0004)	--セレクトボタン押下 (SELECT)
-	:write32(seedMod.symbols["p_log_buffer"], 0x02F00000)	--バッファ先頭アドレス
-	:write32(seedMod.symbols["log_max_words"], 0x10000)	--64Kワード (256KB)
+	:write32(seedMod.symbols["p_log_buffer"], logMod.symbols["log_buffer"])	--バッファ先頭アドレス (動的解決)
 	:end_if()
 
 

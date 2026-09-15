@@ -5,15 +5,13 @@
 // 定数・マクロ定義
 // ============================================================================
 
-// ゴースト記録用バッファ設定
-// 0x02F10000 から 64KB 単位でバッファを割り当て (rec用 1個 + 保存用 10個 = 計11個)
-#define GHOST_BUF_BASE   0x02F10000
-#define GHOST_BUF_SIZE   0x00010000 // 64KB (16384ワード)
-#define GHOST_BUF(i)     ((uint32_t*)(GHOST_BUF_BASE + (i) * GHOST_BUF_SIZE))
-
-#define MAX_GHOST_FRAMES 16000 // 64KBバッファに収まる最大フレーム数 (約4.4分)
+#define MAX_GHOST_FRAMES 12000 // 最大フレーム数 (約3.3分, 11バッファで計528KB)
 #define MAX_FLOORS       32    // 1走あたりに記録可能な最大フロア数
 #define MAX_SAVED_RUNS   10    // 開始地点ごとに保存可能な最大走数 (QSQL全9スロット+一時セーブに対応)
+
+// 記録用および保存用の実体バッファ配列 (rec用 1個 + 保存用 10個 = 計11個, BSSに配置)
+static uint32_t ghost_buffers[1 + MAX_SAVED_RUNS][MAX_GHOST_FRAMES];
+#define GHOST_BUF(i) (ghost_buffers[i])
 
 // リセットおよびフロア開始同期の動作モード
 enum GhostResetMode {
