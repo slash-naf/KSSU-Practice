@@ -87,28 +87,21 @@ static inline void ShowGhost(int screen_x, int screen_y){
 // 公開インターフェース
 // ============================================================================
 
-// フロア開始時またはQL時に呼び出されるリセット処理
-// is_ql != 0: QLによる再スタート (直前走りをスワップしてゴースト自動ループ再生)
-// is_ql == 0: 通常遷移による新フロア (再生データクリアで新規記録開始)
-void ResetGhost(int is_ql){
-	if(is_ql){
-		// 直前の走りの記録フレーム数をバッファ先頭に保存
-		if(is_recording && current_frame > 0){
-			rec_buf[0] = current_frame;
-		}
-
-		// 二重バッファをスワップ (直前の走りを次回再生用に切り替え)
-		uint32_t* tmp = rec_buf;
-		rec_buf = play_buf;
-		play_buf = tmp;
-
-		// 再生バッファの記録フレーム数を取得 (メモリ未初期化等の不正値ガード)
-		uint32_t count = play_buf[0];
-		play_total_frames = (count <= MAX_GHOST_FRAMES) ? count : 0;
-	}else{
-		// 通常遷移時は過去のゴーストをクリア
-		play_total_frames = 0;
+// QL時に呼び出されるリセット処理 (直前走りをスワップしてゴースト自動ループ再生)
+void ResetGhost(void){
+	// 直前の走りの記録フレーム数をバッファ先頭に保存
+	if(is_recording && current_frame > 0){
+		rec_buf[0] = current_frame;
 	}
+
+	// 二重バッファをスワップ (直前の走りを次回再生用に切り替え)
+	uint32_t* tmp = rec_buf;
+	rec_buf = play_buf;
+	play_buf = tmp;
+
+	// 再生バッファの記録フレーム数を取得 (メモリ未初期化等の不正値ガード)
+	uint32_t count = play_buf[0];
+	play_total_frames = (count <= MAX_GHOST_FRAMES) ? count : 0;
 
 	// カウンタを初期化して新規記録を開始
 	current_frame = 0;
