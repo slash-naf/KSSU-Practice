@@ -5,17 +5,21 @@
 // 定数・マクロ定義
 // ============================================================================
 
-// ゴースト記録用バッファ (二重バッファ: Ping-Pong Buffer)
-#define GHOST_BUF_A ((uint32_t*)0x02F10000)
-#define GHOST_BUF_B ((uint32_t*)0x02F20000)
-#define MAX_GHOST_FRAMES 16000 // 64KBバッファ(16384ワード)に収まる最大フレーム数 (約4.4分)
+// ゴースト記録用バッファ設定
+// 0x02F10000 から 64KB 単位でバッファを割り当て (rec用 1個 + 保存用 10個 = 計11個)
+#define GHOST_BUF_BASE   0x02F10000
+#define GHOST_BUF_SIZE   0x00010000 // 64KB (16384ワード)
+#define GHOST_BUF(i)     ((uint32_t*)(GHOST_BUF_BASE + (i) * GHOST_BUF_SIZE))
+
+#define MAX_GHOST_FRAMES 16000 // 64KBバッファに収まる最大フレーム数 (約4.4分)
 #define MAX_FLOORS       32    // 1走あたりに記録可能な最大フロア数
+#define MAX_SAVED_RUNS   10    // 開始地点ごとに保存可能な最大走数 (QSQL全9スロット+一時セーブに対応)
 
 // リセットおよびフロア開始同期の動作モード
 enum GhostResetMode {
 	GHOST_SYNC_FLOOR   = 0, // 通常フロア遷移: 新フロア開始点へ再生フレームを同期
-	GHOST_RESET_RETRY  = 1, // 通常QL: 走りを更新せず維持し、最初からリトライ
-	GHOST_RESET_UPDATE = 2, // SELECT+L によるQL: 直前の走りでゴーストを更新して再生開始
+	GHOST_RESET_RETRY  = 1, // 通常QL: 走りを更新せず維持し、該当開始地点の走りをリトライ
+	GHOST_RESET_UPDATE = 2, // SELECT+L によるQL: 直前の走りを該当開始地点スロットに保存・更新
 };
 
 // DS 画面解像度およびカリングマージン
@@ -57,33 +61,50 @@ typedef struct {
 #define SHADOW_OAM ((volatile OAMEntry*)0x0203F898)
 
 // ============================================================================
-// 走行データ構造体 (二重バッファ管理用)
+// 走行データ構造体
 // ============================================================================
 
 typedef struct {
 	uint32_t* buf;                     // 座標データバッファへのポインタ
 	uint32_t floor_starts[MAX_FLOORS]; // 各フロアの開始フレーム番号
 	uint32_t floor_count;              // 記録されたフロア数
-	uint32_t total_frames;             // 総記録フレーム数
+	uint32_t total_frames;             // 総記録フレーム数 (0なら未使用スロット)
 	uint32_t start_game_states;        // 記録開始時の sav_gameStates
 	uint32_t start_pos;                // 記録開始時の sav_pos
+	uint32_t last_used;                // LRU用アクセス順序カウンタ
 } GhostRun;
 
 // ============================================================================
 // 状態変数
 // ============================================================================
 
-// 二重バッファ (Ping-Pong Buffer): ポインタを入れ替えるだけで全走行データが一瞬でスワップ可能
-static GhostRun run_a = { GHOST_BUF_A, {0}, 1, 0, 0, 0 };
-static GhostRun run_b = { GHOST_BUF_B, {0}, 1, 0, 0, 0 };
-static GhostRun* rec_run = &run_a;
-static GhostRun* play_run = &run_b;
+// 記録用ワークデータ (インデックス 0 のバッファを使用)
+static GhostRun rec_run_data = { GHOST_BUF(0), {0}, 1, 0, 0, 0, 0 };
+static GhostRun* rec_run = &rec_run_data;
 
-// 実行状態 (記録と再生で独立管理)
+// 開始地点ごとに保存される走行データプール (インデックス 1〜10 のバッファを使用)
+static GhostRun saved_runs[MAX_SAVED_RUNS] = {
+	{ GHOST_BUF(1),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(2),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(3),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(4),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(5),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(6),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(7),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(8),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(9),  {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(10), {0}, 0, 0, 0, 0, 0 },
+};
+
+// 再生中の走行データへのポインタ (NULLなら再生対象なし)
+static GhostRun* play_run = 0;
+
+// 実行状態
 static uint32_t rec_frame = 0;
 static uint32_t play_frame = 0;
 static uint32_t play_floor_idx = 0;
 static uint8_t is_play_valid = 0; // 現在のセーブ地点と一致しゴースト再生可能か (1: 再生, 0: 非表示)
+static uint32_t access_clock = 0; // LRU置き換え用タイムスタンプ
 
 // ============================================================================
 // 内部関数 (ヘルパー)
@@ -112,13 +133,6 @@ static inline int IsOnScreen(int x, int y){
 	return (x >= -CULL_MARGIN && x <= SCREEN_WIDTH && y >= -CULL_MARGIN && y <= SCREEN_HEIGHT);
 }
 
-// 記録用と再生用の走行バッファをスワップする
-static inline void SwapGhostRuns(void){
-	GhostRun* tmp = rec_run;
-	rec_run = play_run;
-	play_run = tmp;
-}
-
 // 走行データの記録メタデータを初期化する
 static inline void InitGhostRun(GhostRun* run, uint32_t game_states, uint32_t pos){
 	run->start_game_states = game_states;
@@ -128,11 +142,58 @@ static inline void InitGhostRun(GhostRun* run, uint32_t game_states, uint32_t po
 	run->total_frames = 0;
 }
 
-// ゴーストが現在のロード地点と一致し、有効な再生データを持っているか判定
-static inline int CanPlayGhost(const GhostRun* run, uint32_t game_states, uint32_t pos){
-	return (run->total_frames > 0) &&
-	       (run->start_game_states == game_states) &&
-	       (run->start_pos == pos);
+// 開始地点に一致する保存済み走行データを検索する (見つからなければ NULL)
+static GhostRun* FindSavedRun(uint32_t game_states, uint32_t pos){
+	for(int i = 0; i < MAX_SAVED_RUNS; i++){
+		if(saved_runs[i].total_frames > 0 &&
+		   saved_runs[i].start_game_states == game_states &&
+		   saved_runs[i].start_pos == pos){
+			return &saved_runs[i];
+		}
+	}
+	return 0;
+}
+
+// 保存先スロットを取得する (既存一致 -> 空きスロット -> 最古LRUスロット)
+static GhostRun* AllocateSaveSlot(uint32_t game_states, uint32_t pos){
+	// 1. 同一開始地点の既存スロットがあれば再利用
+	GhostRun* existing = FindSavedRun(game_states, pos);
+	if(existing){
+		return existing;
+	}
+
+	// 2. 空きスロットがあれば割り当て
+	GhostRun* oldest = &saved_runs[0];
+	for(int i = 0; i < MAX_SAVED_RUNS; i++){
+		if(saved_runs[i].total_frames == 0){
+			return &saved_runs[i];
+		}
+		if(saved_runs[i].last_used < oldest->last_used){
+			oldest = &saved_runs[i];
+		}
+	}
+
+	// 3. 全スロット使用中の場合は最古 (LRU) スロットを上書き
+	return oldest;
+}
+
+// 直前の記録走行を開始地点スロットに保存・更新する (バッファポインタをスワップして O(1) で即時完了)
+static void SaveGhostRun(void){
+	GhostRun* target = AllocateSaveSlot(rec_run->start_game_states, rec_run->start_pos);
+
+	target->start_game_states = rec_run->start_game_states;
+	target->start_pos         = rec_run->start_pos;
+	target->floor_count       = rec_run->floor_count;
+	target->total_frames      = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
+	for(uint32_t i = 0; i < rec_run->floor_count; i++){
+		target->floor_starts[i] = rec_run->floor_starts[i];
+	}
+	target->last_used = ++access_clock;
+
+	// バッファポインタをスワップ (64KBの配列コピーを行わず、ポインタ交換で即時保存)
+	uint32_t* tmp_buf = target->buf;
+	target->buf       = rec_run->buf;
+	rec_run->buf      = tmp_buf;
 }
 
 // 通常フロア遷移時の同期処理
@@ -143,10 +204,12 @@ static inline void SyncFloor(void){
 	}
 
 	// 再生側: 次フロアの開始フレームへ同期 (ジャンプ)
-	play_floor_idx++;
-	play_frame = (play_floor_idx < play_run->floor_count)
-		? play_run->floor_starts[play_floor_idx]
-		: play_run->total_frames;
+	if(play_run && play_floor_idx < play_run->floor_count){
+		play_floor_idx++;
+		play_frame = (play_floor_idx < play_run->floor_count)
+			? play_run->floor_starts[play_floor_idx]
+			: play_run->total_frames;
+	}
 }
 
 // ============================================================================
@@ -166,17 +229,27 @@ void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 		return;
 	}
 
-	// --- 2. QL時: SELECT+L なら直前の走りでゴーストを更新 (1フレーム以上記録がある場合のみ) ---
+	// --- 2. QL時: SELECT+L なら直前の走りを該当開始地点のスロットに保存 ---
 	if(mode == GHOST_RESET_UPDATE && rec_frame > 0){
-		rec_run->total_frames = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
-		SwapGhostRuns();
+		// 未QL状態からの初回走行の場合、今回のロード先を開始地点情報として補正
+		if(rec_run->start_game_states == 0 && rec_run->start_pos == 0){
+			rec_run->start_game_states = game_states;
+			rec_run->start_pos = pos;
+		}
+		SaveGhostRun();
 	}
 
-	// ロード先の sav_gameStates および sav_pos が直前ゴーストの開始地点と一致するか判定
-	// 一致しない場合はゴーストを表示しない (別フロアや別スロットへのQL時の座標不整合を防止)
-	is_play_valid = CanPlayGhost(play_run, game_states, pos);
+	// --- 3. ロード先に対応する保存済みゴーストを検索 ---
+	play_run = FindSavedRun(game_states, pos);
+	if(play_run && play_run->total_frames > 0){
+		play_run->last_used = ++access_clock;
+		is_play_valid = 1;
+	}else{
+		play_run = 0;
+		is_play_valid = 0;
+	}
 
-	// --- 3. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
+	// --- 4. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
 	InitGhostRun(rec_run, game_states, pos);
 	rec_frame = 0;
 	play_frame = 0;
@@ -203,8 +276,8 @@ void UpdateGhost(void){
 	}
 
 	// --- 2. 再生・描画処理 ---
-	// ロード地点が不一致の場合はゴーストを一切表示しない
-	if(!is_play_valid){
+	// ロード地点に一致するゴーストが存在しない、またはフロア終端に達している場合は非表示
+	if(!is_play_valid || !play_run || play_floor_idx >= play_run->floor_count){
 		HideGhost();
 		return;
 	}
@@ -214,8 +287,8 @@ void UpdateGhost(void){
 		? play_run->floor_starts[play_floor_idx + 1]
 		: play_run->total_frames;
 
-	// 再生データ終端またはフロア終端 (ゴーストが先にフロアを抜けた場合) は非表示にして終了
-	if(play_floor_idx >= play_run->floor_count || play_frame >= play_floor_end){
+	// 現在フロアの再生データ終端 (ゴーストが先にフロアを抜けた場合) は非表示にして終了
+	if(play_frame >= play_floor_end){
 		HideGhost();
 		return;
 	}
