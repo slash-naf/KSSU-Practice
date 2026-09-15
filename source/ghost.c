@@ -5,11 +5,11 @@
 // 定数・マクロ定義
 // ============================================================================
 
-#define MAX_GHOST_FRAMES 12000 // 最大フレーム数 (約3.3分, 11バッファで計528KB)
+#define MAX_GHOST_FRAMES 7200  // 最大フレーム数 (2分 = 120秒, 21バッファで計604.8KB)
 #define MAX_FLOORS       32    // 1走あたりに記録可能な最大フロア数
-#define MAX_SAVED_RUNS   10    // 開始地点ごとに保存可能な最大走数 (QSQL全9スロット+一時セーブに対応)
+#define MAX_SAVED_RUNS   20    // 開始地点ごとに保存可能な最大走数 (20地点)
 
-// 記録用および保存用の実体バッファ配列 (rec用 1個 + 保存用 10個 = 計11個, BSSに配置)
+// 記録用および保存用の実体バッファ配列 (rec用 1個 + 保存用 20個 = 計21個, BSSに配置)
 static uint32_t ghost_buffers[1 + MAX_SAVED_RUNS][MAX_GHOST_FRAMES];
 #define GHOST_BUF(i) (ghost_buffers[i])
 
@@ -80,7 +80,7 @@ typedef struct {
 static GhostRun rec_run_data = { GHOST_BUF(0), {0}, 1, 0, 0, 0, 0 };
 static GhostRun* rec_run = &rec_run_data;
 
-// 開始地点ごとに保存される走行データプール (インデックス 1〜10 のバッファを使用)
+// 開始地点ごとに保存される走行データプール (インデックス 1〜20 のバッファを使用)
 static GhostRun saved_runs[MAX_SAVED_RUNS] = {
 	{ GHOST_BUF(1),  {0}, 0, 0, 0, 0, 0 },
 	{ GHOST_BUF(2),  {0}, 0, 0, 0, 0, 0 },
@@ -92,6 +92,16 @@ static GhostRun saved_runs[MAX_SAVED_RUNS] = {
 	{ GHOST_BUF(8),  {0}, 0, 0, 0, 0, 0 },
 	{ GHOST_BUF(9),  {0}, 0, 0, 0, 0, 0 },
 	{ GHOST_BUF(10), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(11), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(12), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(13), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(14), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(15), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(16), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(17), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(18), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(19), {0}, 0, 0, 0, 0, 0 },
+	{ GHOST_BUF(20), {0}, 0, 0, 0, 0, 0 },
 };
 
 // 再生中の走行データへのポインタ (NULLなら再生対象なし)

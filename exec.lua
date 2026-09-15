@@ -1,6 +1,6 @@
 local ar = require("ActionReplay")
 
-local ram = ar.allocateRam(0x022C0000, 0x022C2000, 0x02360000)
+local ram = ar.allocateRam(0x022C0000, 0x022C2000, 0x02368000)
 local cheats = {}
 
 -- QSQL モジュール
