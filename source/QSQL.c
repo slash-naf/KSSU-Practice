@@ -425,7 +425,10 @@ void QL(void){
 
 	//ロード
 	{
-		if(s->sav_gameStates == 0){return;}
+		if(s->sav_gameStates == 0){
+			ql_update_ghost = 0;
+			return;
+		}
 		ql = s;
 
 		//HPと残機を最大に
