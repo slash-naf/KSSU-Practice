@@ -74,7 +74,7 @@ void (*p_reset_rng)(void);
 
 //ゴーストモジュール連携用ポインタ (ghostモジュール使用時に設定)
 void (*p_update_ghost)(void);
-void (*p_reset_ghost)(int);
+void (*p_reset_ghost)(int, uint32_t, uint32_t);
 uint8_t ql_update_ghost; // SELECT+L で QL されたかのフラグ (1: 走りを更新, 0: 走りを維持)
 
 // 下画面に表示させる4桁の数値4つ
@@ -132,7 +132,8 @@ void QS(void){
 				//ゴーストリセット
 				if(p_reset_ghost){
 					// 1: 通常QL (走りは更新せず維持), 2: SELECT+L (直前の走りでゴースト更新)
-					p_reset_ghost(ql_update_ghost ? 2 : 1);
+					// ロード先の sav_gameStates と sav_pos を渡し、開始地点が異なる場合はゴーストを非表示にする
+					p_reset_ghost(ql_update_ghost ? 2 : 1, ql->sav_gameStates, ql->sav_pos);
 				}
 				ql_update_ghost = 0;
 			}else{
@@ -145,7 +146,7 @@ void QS(void){
 		if(t->sav_pos == 0){	
 			//通常フロア遷移時: ゴーストの開始タイミングを新フロアに同期
 			if(!ql && p_reset_ghost){
-				p_reset_ghost(0);
+				p_reset_ghost(0, 0, 0);
 			}
 			ql = 0;
 

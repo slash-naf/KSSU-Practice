@@ -30,6 +30,7 @@ enum GhostResetMode {
 // DISPCNTの1D Boundary 256バイトモードにおける正規タイル番号 (Tile 222: 222*256 = 56,832 = 0xDE00)
 #define STAR_TILE_INDEX 222
 #define STAR_PAL_INDEX  7   // 公式星アイコン用パレット (黄色)
+#define STAR_HALF_SIZE  8   // 16x16星アイコンの中心合わせオフセット
 
 // OAM アトリビュートビット定義
 #define OBJ_DISABLE     0x0200 // Attr0: 非表示フラグ
@@ -64,6 +65,8 @@ typedef struct {
 	uint32_t floor_starts[MAX_FLOORS]; // 各フロアの開始フレーム番号
 	uint32_t floor_count;              // 記録されたフロア数
 	uint32_t total_frames;             // 総記録フレーム数
+	uint32_t start_game_states;        // 記録開始時の sav_gameStates
+	uint32_t start_pos;                // 記録開始時の sav_pos
 } GhostRun;
 
 // ============================================================================
@@ -71,8 +74,8 @@ typedef struct {
 // ============================================================================
 
 // 二重バッファ (Ping-Pong Buffer): ポインタを入れ替えるだけで全走行データが一瞬でスワップ可能
-static GhostRun run_a = { GHOST_BUF_A, {0}, 1, 0 };
-static GhostRun run_b = { GHOST_BUF_B, {0}, 1, 0 };
+static GhostRun run_a = { GHOST_BUF_A, {0}, 1, 0, 0, 0 };
+static GhostRun run_b = { GHOST_BUF_B, {0}, 1, 0, 0, 0 };
 static GhostRun* rec_run = &run_a;
 static GhostRun* play_run = &run_b;
 
@@ -80,7 +83,7 @@ static GhostRun* play_run = &run_b;
 static uint32_t rec_frame = 0;
 static uint32_t play_frame = 0;
 static uint32_t play_floor_idx = 0;
-static uint8_t is_recording = 1;
+static uint8_t is_play_valid = 0; // 現在のセーブ地点と一致しゴースト再生可能か (1: 再生, 0: 非表示)
 
 // ============================================================================
 // 内部関数 (ヘルパー)
@@ -104,48 +107,80 @@ static inline void ShowGhost(int screen_x, int screen_y){
 	SHADOW_OAM[GHOST_OAM_INDEX] = e;
 }
 
+// 画面内描画範囲内かどうかを判定 (DS画面 256x192, マージン +-32ドット)
+static inline int IsOnScreen(int x, int y){
+	return (x >= -CULL_MARGIN && x <= SCREEN_WIDTH && y >= -CULL_MARGIN && y <= SCREEN_HEIGHT);
+}
+
+// 記録用と再生用の走行バッファをスワップする
+static inline void SwapGhostRuns(void){
+	GhostRun* tmp = rec_run;
+	rec_run = play_run;
+	play_run = tmp;
+}
+
+// 走行データの記録メタデータを初期化する
+static inline void InitGhostRun(GhostRun* run, uint32_t game_states, uint32_t pos){
+	run->start_game_states = game_states;
+	run->start_pos = pos;
+	run->floor_count = 1;
+	run->floor_starts[0] = 0; // 第1フロアは0フレームから
+	run->total_frames = 0;
+}
+
+// ゴーストが現在のロード地点と一致し、有効な再生データを持っているか判定
+static inline int CanPlayGhost(const GhostRun* run, uint32_t game_states, uint32_t pos){
+	return (run->total_frames > 0) &&
+	       (run->start_game_states == game_states) &&
+	       (run->start_pos == pos);
+}
+
+// 通常フロア遷移時の同期処理
+static inline void SyncFloor(void){
+	// 記録側: 新フロア開始フレームを登録
+	if(rec_run->floor_count < MAX_FLOORS){
+		rec_run->floor_starts[rec_run->floor_count++] = rec_frame;
+	}
+
+	// 再生側: 次フロアの開始フレームへ同期 (ジャンプ)
+	play_floor_idx++;
+	play_frame = (play_floor_idx < play_run->floor_count)
+		? play_run->floor_starts[play_floor_idx]
+		: play_run->total_frames;
+}
+
 // ============================================================================
 // 公開インターフェース
 // ============================================================================
 
-// リセットおよびフロア開始同期処理 (mode: enum GhostResetMode)
-void ResetGhost(int mode){
+// リセットおよびフロア開始同期処理
+// mode: enum GhostResetMode (0: フロア同期, 1: 走りを維持してリトライ, 2: 走りを更新してリスタート)
+// game_states: ロード先の sav_gameStates (QL時のみ有効)
+// pos: ロード先の sav_pos (QL時のみ有効)
+void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 	HideGhost();
 
 	// --- 1. 通常フロア遷移時: 新フロア開始点へ再生同期 ---
 	if(mode == GHOST_SYNC_FLOOR){
-		if(is_recording && rec_run->floor_count < MAX_FLOORS){
-			rec_run->floor_starts[rec_run->floor_count++] = rec_frame;
-		}
-
-		play_floor_idx++;
-		play_frame = (play_floor_idx < play_run->floor_count)
-			? play_run->floor_starts[play_floor_idx]
-			: play_run->total_frames;
+		SyncFloor();
 		return;
 	}
 
-	// --- 2. QL時: SELECT+L なら直前の走りでゴーストを更新 ---
-	if(mode == GHOST_RESET_UPDATE){
-		if(is_recording && rec_frame > 0){
-			rec_run->total_frames = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
-		}
-
-		// 二重バッファをスワップ (直前の走りを次回再生用に即時切り替え)
-		GhostRun* tmp = rec_run;
-		rec_run = play_run;
-		play_run = tmp;
+	// --- 2. QL時: SELECT+L なら直前の走りでゴーストを更新 (1フレーム以上記録がある場合のみ) ---
+	if(mode == GHOST_RESET_UPDATE && rec_frame > 0){
+		rec_run->total_frames = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
+		SwapGhostRuns();
 	}
 
-	// --- 3. QL共通: 記録側初期化および再生位置のリセット ---
-	rec_run->floor_count = 1;
-	rec_run->floor_starts[0] = 0; // 第1フロアは0フレームから
-	rec_run->total_frames = 0;
+	// ロード先の sav_gameStates および sav_pos が直前ゴーストの開始地点と一致するか判定
+	// 一致しない場合はゴーストを表示しない (別フロアや別スロットへのQL時の座標不整合を防止)
+	is_play_valid = CanPlayGhost(play_run, game_states, pos);
 
+	// --- 3. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
+	InitGhostRun(rec_run, game_states, pos);
 	rec_frame = 0;
 	play_frame = 0;
 	play_floor_idx = 0;
-	is_recording = 1;
 }
 
 // 毎フレーム呼び出される記録・再生・描画処理
@@ -163,34 +198,41 @@ void UpdateGhost(void){
 	}
 
 	// --- 1. 記録処理 ---
-	if(is_recording && rec_frame < MAX_GHOST_FRAMES){
+	if(rec_frame < MAX_GHOST_FRAMES){
 		rec_run->buf[rec_frame++] = cur_pos;
 	}
 
 	// --- 2. 再生・描画処理 ---
+	// ロード地点が不一致の場合はゴーストを一切表示しない
+	if(!is_play_valid){
+		HideGhost();
+		return;
+	}
+
 	// 現在フロアの終端フレーム (次フロアの開始フレーム、または総フレーム数)
 	uint32_t play_floor_end = (play_floor_idx + 1 < play_run->floor_count)
 		? play_run->floor_starts[play_floor_idx + 1]
 		: play_run->total_frames;
 
-	// 現在フロアの範囲内のみ再生 (ゴーストが先にフロアを抜けた場合は待機)
-	if(play_floor_idx < play_run->floor_count && play_frame < play_floor_end){
-		uint32_t ghost_pos = play_run->buf[play_frame++];
-		uint32_t cam = cameraPos;
+	// 再生データ終端またはフロア終端 (ゴーストが先にフロアを抜けた場合) は非表示にして終了
+	if(play_floor_idx >= play_run->floor_count || play_frame >= play_floor_end){
+		HideGhost();
+		return;
+	}
 
-		// 画面内描画座標 (ワールド座標 - カメラ座標、16x16星の中心合わせ -8ドット)
-		// 現在のカービィのスプライトに依存せず、カメラ基準で直接描画するため姿勢によるブレがゼロ
-		int g_screen_x = POS_X(ghost_pos) - POS_X(cam) - 8;
-		int g_screen_y = POS_Y(ghost_pos) - POS_Y(cam) - 8;
+	uint32_t ghost_pos = play_run->buf[play_frame++];
+	uint32_t cam = cameraPos;
 
-		// 画面外カリング (DS画面 256x192, マージン +-32ドット)
-		if(g_screen_x < -CULL_MARGIN || g_screen_x > SCREEN_WIDTH || g_screen_y < -CULL_MARGIN || g_screen_y > SCREEN_HEIGHT){
-			HideGhost();
-		}else{
-			ShowGhost(g_screen_x, g_screen_y);
-		}
+	// 画面内描画座標 (ワールド座標 - カメラ座標、16x16星の中心合わせ)
+	// 現在のカービィのスプライトに依存せず、カメラ基準で直接描画するため姿勢によるブレがゼロ
+	int g_screen_x = POS_X(ghost_pos) - POS_X(cam) - STAR_HALF_SIZE;
+	int g_screen_y = POS_Y(ghost_pos) - POS_Y(cam) - STAR_HALF_SIZE;
+
+	// 画面外カリング (DS画面 256x192, マージン +-32ドット)
+	if(IsOnScreen(g_screen_x, g_screen_y)){
+		ShowGhost(g_screen_x, g_screen_y);
 	}else{
-		// 再生データ終端またはフロア終端後は非表示
 		HideGhost();
 	}
 }
+
