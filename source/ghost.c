@@ -6,7 +6,6 @@
 // ============================================================================
 
 // ゴースト記録用バッファ (二重バッファ: Ping-Pong Buffer)
-// バッファ先頭(index 0)に記録フレーム数、以降各フレームの座標(X[16bit] | Y[16bit])を格納
 #define GHOST_BUF_A ((uint32_t*)0x02F10000)
 #define GHOST_BUF_B ((uint32_t*)0x02F20000)
 #define MAX_GHOST_FRAMES 16000 // 64KBバッファ(16384ワード)に収まる最大フレーム数 (約4.4分)
@@ -50,25 +49,31 @@ typedef struct {
 #define SHADOW_OAM ((volatile OAMEntry*)0x0203F898)
 
 // ============================================================================
+// 走行データ構造体 (二重バッファ管理用)
+// ============================================================================
+
+typedef struct {
+	uint32_t* buf;                     // 座標データバッファへのポインタ
+	uint32_t floor_starts[MAX_FLOORS]; // 各フロアの開始フレーム番号
+	uint32_t floor_count;              // 記録されたフロア数
+	uint32_t total_frames;             // 総記録フレーム数
+} GhostRun;
+
+// ============================================================================
 // 状態変数
 // ============================================================================
 
-// バッファ管理ポインタ
-static uint32_t* rec_buf = GHOST_BUF_A;
-static uint32_t* play_buf = GHOST_BUF_B;
+// 二重バッファ (Ping-Pong Buffer): ポインタを入れ替えるだけで全走行データが一瞬でスワップ可能
+static GhostRun run_a = { GHOST_BUF_A, {0}, 1, 0 };
+static GhostRun run_b = { GHOST_BUF_B, {0}, 1, 0 };
+static GhostRun* rec_run = &run_a;
+static GhostRun* play_run = &run_b;
 
-// 実行状態 (記録と再生で独立したフレームカウンタを管理)
+// 実行状態 (記録と再生で独立管理)
 static uint32_t rec_frame = 0;
 static uint32_t play_frame = 0;
-static uint32_t play_total_frames = 0;
-static uint8_t is_recording = 1;
-
-// フロア開始フレーム管理 (フロア遷移時の開始タイミング同期用)
-static uint32_t rec_floor_starts[MAX_FLOORS] = {0};
-static uint32_t play_floor_starts[MAX_FLOORS] = {0};
-static uint32_t rec_floor_count = 1; // 第1フロア(インデックス0)を登録済み
-static uint32_t play_floor_count = 0;
 static uint32_t play_floor_idx = 0;
+static uint8_t is_recording = 1;
 
 // ============================================================================
 // 内部関数 (ヘルパー)
@@ -101,50 +106,39 @@ static inline void ShowGhost(int screen_x, int screen_y){
 // is_ql == 0: 通常フロア遷移 (新フロア開始点へ再生フレームを同期し、新フロアの記録開始点をマーク)
 void ResetGhost(int is_ql){
 	if(is_ql){
-		// 直前の走りの記録フレーム数をバッファ先頭に保存
+		// 1. 直前の走りの記録フレーム数を確定
 		if(is_recording && rec_frame > 0){
-			rec_buf[0] = rec_frame;
+			rec_run->total_frames = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
 		}
 
-		// 二重バッファをスワップ (直前の走りを次回再生用に切り替え)
-		uint32_t* tmp = rec_buf;
-		rec_buf = play_buf;
-		play_buf = tmp;
+		// 2. 走行データをスワップ (直前の走りを次回再生用に即時切り替え、配列コピー不要)
+		GhostRun* tmp = rec_run;
+		rec_run = play_run;
+		play_run = tmp;
 
-		// 再生バッファの記録フレーム数を取得 (メモリ未初期化等の不正値ガード)
-		uint32_t count = play_buf[0];
-		play_total_frames = (count <= MAX_GHOST_FRAMES) ? count : 0;
+		// 3. 次回記録用データの初期化
+		rec_run->floor_count = 1;
+		rec_run->floor_starts[0] = 0; // 第1フロアは0フレームから
+		rec_run->total_frames = 0;
 
-		// フロア開始フレームテーブルの引き継ぎ
-		for(uint32_t i = 0; i < rec_floor_count && i < MAX_FLOORS; i++){
-			play_floor_starts[i] = rec_floor_starts[i];
-		}
-		play_floor_count = rec_floor_count;
-
-		// カウンタおよびフロアインデックスを初期化して新規記録を開始
+		// 4. カウンタおよびフロアインデックスを初期化して新規記録を開始
 		rec_frame = 0;
 		play_frame = 0;
 		play_floor_idx = 0;
-		rec_floor_count = 1;
-		rec_floor_starts[0] = 0; // 第1フロアの開始は0フレーム
 		is_recording = 1;
 	}else{
 		// 通常フロア遷移時: 記録側に新フロア開始フレームを登録
-		if(rec_floor_count == 0){
-			rec_floor_starts[0] = 0;
-			rec_floor_count = 1;
-		}
-		if(is_recording && rec_floor_count < MAX_FLOORS){
-			rec_floor_starts[rec_floor_count++] = rec_frame;
+		if(is_recording && rec_run->floor_count < MAX_FLOORS){
+			rec_run->floor_starts[rec_run->floor_count++] = rec_frame;
 		}
 
 		// 再生側: 次フロアの開始フレームへ同期 (ジャンプ)
 		play_floor_idx++;
-		if(play_floor_idx < play_floor_count){
-			play_frame = play_floor_starts[play_floor_idx];
+		if(play_floor_idx < play_run->floor_count){
+			play_frame = play_run->floor_starts[play_floor_idx];
 		}else{
 			// 過去の走りがこのフロアに達していなければ再生終了
-			play_frame = play_total_frames;
+			play_frame = play_run->total_frames;
 		}
 	}
 
@@ -168,20 +162,19 @@ void UpdateGhost(void){
 
 	// --- 1. 記録処理 ---
 	if(is_recording && rec_frame < MAX_GHOST_FRAMES){
-		rec_buf[1 + rec_frame] = cur_pos;
-		rec_frame++;
+		rec_run->buf[rec_frame++] = cur_pos;
 	}
 
 	// --- 2. 再生・描画処理 ---
 	// 現在フロアの終端フレーム (次フロアの開始フレーム、または総フレーム数)
-	uint32_t play_floor_end = play_total_frames;
-	if(play_floor_idx + 1 < play_floor_count){
-		play_floor_end = play_floor_starts[play_floor_idx + 1];
+	uint32_t play_floor_end = play_run->total_frames;
+	if(play_floor_idx + 1 < play_run->floor_count){
+		play_floor_end = play_run->floor_starts[play_floor_idx + 1];
 	}
 
 	// 現在フロアの範囲内のみ再生 (ゴーストが先にフロアを抜けた場合は待機)
-	if(play_floor_idx < play_floor_count && play_frame < play_floor_end){
-		uint32_t ghost_pos = play_buf[1 + play_frame];
+	if(play_floor_idx < play_run->floor_count && play_frame < play_floor_end){
+		uint32_t ghost_pos = play_run->buf[play_frame++];
 		uint32_t cam = cameraPos;
 
 		// 画面内描画座標 (ワールド座標 - カメラ座標、16x16星の中心合わせ -8ドット)
@@ -195,8 +188,6 @@ void UpdateGhost(void){
 		}else{
 			ShowGhost(g_screen_x, g_screen_y);
 		}
-
-		play_frame++;
 	}else{
 		// 再生データ終端またはフロア終端後は非表示
 		HideGhost();
