@@ -109,6 +109,11 @@ void QS(void){
 
 	//座標を監視してフロア遷移時の情報を保持する
 	if(getPos == 0 || getPos == POS_IN_CORKBOARD){
+		//コルクボード（モード選択画面）時はゴースト機能を無効化・初期化
+		if(getPos == POS_IN_CORKBOARD && p_reset_ghost){
+			p_reset_ghost(GHOST_RESET_DISABLE, 0, 0);
+		}
+
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
 			prevMusic = music;
@@ -128,9 +133,9 @@ void QS(void){
 
 				//ゴーストリセット (t->sav_posクリア前にql->sav_posを渡し、Y+R時に0になるのを防止)
 				if(p_reset_ghost){
-					// 1: 通常QL (走りは更新せず維持), 2: SELECT+L / SELECT+Y+R (直前の走りでゴースト更新)
+					// 通常QL: 走りは更新せず維持, SELECT+L / SELECT+Y+R: 直前の走りでゴースト更新
 					// ロード先の sav_gameStates と sav_pos を渡し、開始地点が異なる場合はゴーストを非表示にする
-					p_reset_ghost(ql_update_ghost ? 2 : 1, ql->sav_gameStates, ql->sav_pos);
+					p_reset_ghost(ql_update_ghost ? GHOST_RESET_UPDATE : GHOST_RESET_RETRY, ql->sav_gameStates, ql->sav_pos);
 				}
 				ql_update_ghost = 0;
 			}else{
@@ -147,7 +152,7 @@ void QS(void){
 		if(t->sav_pos == 0){	
 			//通常フロア遷移時: ゴーストの開始タイミングを新フロアに同期
 			if(!ql && p_reset_ghost){
-				p_reset_ghost(0, 0, 0);
+				p_reset_ghost(GHOST_SYNC_FLOOR, 0, 0);
 			}
 			ql = 0;
 

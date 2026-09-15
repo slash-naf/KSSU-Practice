@@ -13,13 +13,6 @@
 static uint32_t ghost_buffers[1 + MAX_SAVED_RUNS][MAX_GHOST_FRAMES];
 #define GHOST_BUF(i) (ghost_buffers[i])
 
-// リセットおよびフロア開始同期の動作モード
-enum GhostResetMode {
-	GHOST_SYNC_FLOOR   = 0, // 通常フロア遷移: 新フロア開始点へ再生フレームを同期
-	GHOST_RESET_RETRY  = 1, // 通常QL: 走りを更新せず維持し、該当開始地点の走りをリトライ
-	GHOST_RESET_UPDATE = 2, // SELECT+L によるQL: 直前の走りを該当開始地点スロットに保存・更新
-};
-
 // DS 画面解像度およびカリングマージン
 #define SCREEN_WIDTH   256
 #define SCREEN_HEIGHT  192
@@ -239,31 +232,42 @@ static inline void SyncFloor(void){
 // ============================================================================
 
 // リセットおよびフロア開始同期処理
-// mode: enum GhostResetMode (0: フロア同期, 1: 走りを維持してリトライ, 2: 走りを更新してリスタート)
+// mode: enum GhostResetMode (0: フロア同期, 1: 走りを維持してリトライ, 2: 走りを更新してリスタート, 3: 無効化・初期化)
 // game_states: ロード先の sav_gameStates (QL時のみ有効)
 // pos: ロード先の sav_pos (QL時のみ有効)
 void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 	HideGhost();
 
-	// --- 1. 通常フロア遷移時: 新フロア開始点へ再生同期 ---
+	// --- 1. コルクボード遷移時等: ゴースト機能の無効化・初期化 ---
+	if(mode == GHOST_RESET_DISABLE){
+		is_rec_valid = 0;
+		rec_frame = 0;
+		play_run = 0;
+		is_play_valid = 0;
+		play_frame = 0;
+		play_floor_idx = 0;
+		return;
+	}
+
+	// --- 2. 通常フロア遷移時: 新フロア開始点へ再生同期 ---
 	if(mode == GHOST_SYNC_FLOOR){
 		SyncFloor();
 		return;
 	}
 
-	// --- 2. QL時: SELECT+L かつ記録有効時なら直前の走りを該当開始地点のスロットに保存 ---
+	// --- 3. QL時: SELECT+L かつ記録有効時なら直前の走りを該当開始地点のスロットに保存 ---
 	if(mode == GHOST_RESET_UPDATE && is_rec_valid && rec_frame > 0){
 		SaveGhostRun();
 	}
 
-	// --- 3. ロード先に対応する保存済みゴーストを検索 ---
+	// --- 4. ロード先に対応する保存済みゴーストを検索 ---
 	play_run = FindSavedRun(game_states, pos);
 	is_play_valid = (play_run != 0);
 	if(play_run){
 		play_run->last_used = ++access_clock;
 	}
 
-	// --- 4. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
+	// --- 5. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
 	InitGhostRun(rec_run, game_states, pos);
 	rec_frame = 0;
 	play_frame = 0;

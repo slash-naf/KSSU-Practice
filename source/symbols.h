@@ -148,13 +148,23 @@ enum Pos{
 #define helperRode              (*(uint8_t*)0x020BAB39)     // ウィリーライダーなら2
 #define helperInvincibility     (*(uint16_t*)0x020BADE8)    // 2Pのむてきキャンディの残り時間
 
-// ログ出力設定
-#define LOG_MAX_WORDS           0x4000                      // 16Kワード (64KB, 最大8,191イベント)
-
 // その他
 #define menuPageIdx             (*(uint8_t*)0x021983CA)     // ポーズのメニューのページ番号
 #define heldButtons             (*(uint16_t*)0x02041E64)   // 押しているボタンに対応するビットが1になる
 #define pressedButtons          (*(uint16_t*)0x02041E68)   // 押したボタンに対応するビットが1になる
 #define buttons                 (*(uint16_t*)0x04000130)    // 押しているボタンに対応するビットが0になる
+
+
+
+// ログ出力設定
+#define LOG_MAX_WORDS           0x4000                      // 16Kワード (64KB, 最大8,191イベント)
+
+// ゴースト設定
+enum GhostResetMode {
+	GHOST_SYNC_FLOOR    = 0, // 通常フロア遷移: 新フロア開始点へ再生フレームを同期
+	GHOST_RESET_RETRY   = 1, // 通常QL: 走りを更新せず維持し、該当開始地点の走りをリトライ
+	GHOST_RESET_UPDATE  = 2, // SELECT+L によるQL: 直前の走りを該当開始地点スロットに保存・更新
+	GHOST_RESET_DISABLE = 3, // コルクボード遷移時: ゴースト機能を無効化・初期化
+};
 
 #endif // SYMBOLS_H
