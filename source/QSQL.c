@@ -75,6 +75,7 @@ void (*p_reset_rng)(void);
 //ゴーストモジュール連携用ポインタ (ghostモジュール使用時に設定)
 void (*p_update_ghost)(void);
 void (*p_reset_ghost)(int);
+uint8_t ql_update_ghost; // SELECT+L で QL されたかのフラグ (1: 走りを更新, 0: 走りを維持)
 
 // 下画面に表示させる4桁の数値4つ
 uint32_t show[4];
@@ -128,10 +129,12 @@ void QS(void){
 					*p_seed_advances = 0;
 				}
 
-				//ゴーストリセット (自動ループ: 直前走りをスワップして再生)
+				//ゴーストリセット
 				if(p_reset_ghost){
-					p_reset_ghost(1);
+					// 1: 通常QL (走りは更新せず維持), 2: SELECT+L (直前の走りでゴースト更新)
+					p_reset_ghost(ql_update_ghost ? 2 : 1);
 				}
+				ql_update_ghost = 0;
 			}else{
 				//無敵キャンディ時間を保持
 				t->sav_playerInvincibility = playerInvincibility;
@@ -335,6 +338,8 @@ void QL(void){
 	//既にQS情報をロード中なら
 	if(ql){return;}
 
+	ql_update_ghost = 0;
+
 	SaveGroup* g = &saveGroups[gameMode];
 	Sav* s = &tmp_sav;	//デフォルトのQL対象は一時セーブ
 
@@ -343,8 +348,11 @@ void QL(void){
 	case STATE_PAUSE:
 		return;
 	case STATE_PLAY:
-		//通常時にLでQL
+		//通常時にLでQL (SELECT+Lでゴースト走りを更新)
 		if(L & pressedButtons){
+			if(SELECT & heldButtons){
+				ql_update_ghost = 1;
+			}
 			if(R & heldButtons){
 				//十字キーの入力に応じた8方向と無入力の9通りの値を得る
 				int arrow = getArrow();

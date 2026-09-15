@@ -11,6 +11,13 @@
 #define MAX_GHOST_FRAMES 16000 // 64KBバッファ(16384ワード)に収まる最大フレーム数 (約4.4分)
 #define MAX_FLOORS       32    // 1走あたりに記録可能な最大フロア数
 
+// リセットおよびフロア開始同期の動作モード
+enum GhostResetMode {
+	GHOST_SYNC_FLOOR   = 0, // 通常フロア遷移: 新フロア開始点へ再生フレームを同期
+	GHOST_RESET_RETRY  = 1, // 通常QL: 走りを更新せず維持し、最初からリトライ
+	GHOST_RESET_UPDATE = 2, // SELECT+L によるQL: 直前の走りでゴーストを更新して再生開始
+};
+
 // DS 画面解像度およびカリングマージン
 #define SCREEN_WIDTH   256
 #define SCREEN_HEIGHT  192
@@ -101,49 +108,44 @@ static inline void ShowGhost(int screen_x, int screen_y){
 // 公開インターフェース
 // ============================================================================
 
-// リセットおよびフロア開始同期処理
-// is_ql != 0: QLによるリセット (直前走りを確定・スワップしてループ再生・0フレームから新規記録開始)
-// is_ql == 0: 通常フロア遷移 (新フロア開始点へ再生フレームを同期し、新フロアの記録開始点をマーク)
-void ResetGhost(int is_ql){
-	if(is_ql){
-		// 1. 直前の走りの記録フレーム数を確定
-		if(is_recording && rec_frame > 0){
-			rec_run->total_frames = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
-		}
+// リセットおよびフロア開始同期処理 (mode: enum GhostResetMode)
+void ResetGhost(int mode){
+	HideGhost();
 
-		// 2. 走行データをスワップ (直前の走りを次回再生用に即時切り替え、配列コピー不要)
-		GhostRun* tmp = rec_run;
-		rec_run = play_run;
-		play_run = tmp;
-
-		// 3. 次回記録用データの初期化
-		rec_run->floor_count = 1;
-		rec_run->floor_starts[0] = 0; // 第1フロアは0フレームから
-		rec_run->total_frames = 0;
-
-		// 4. カウンタおよびフロアインデックスを初期化して新規記録を開始
-		rec_frame = 0;
-		play_frame = 0;
-		play_floor_idx = 0;
-		is_recording = 1;
-	}else{
-		// 通常フロア遷移時: 記録側に新フロア開始フレームを登録
+	// --- 1. 通常フロア遷移時: 新フロア開始点へ再生同期 ---
+	if(mode == GHOST_SYNC_FLOOR){
 		if(is_recording && rec_run->floor_count < MAX_FLOORS){
 			rec_run->floor_starts[rec_run->floor_count++] = rec_frame;
 		}
 
-		// 再生側: 次フロアの開始フレームへ同期 (ジャンプ)
 		play_floor_idx++;
-		if(play_floor_idx < play_run->floor_count){
-			play_frame = play_run->floor_starts[play_floor_idx];
-		}else{
-			// 過去の走りがこのフロアに達していなければ再生終了
-			play_frame = play_run->total_frames;
-		}
+		play_frame = (play_floor_idx < play_run->floor_count)
+			? play_run->floor_starts[play_floor_idx]
+			: play_run->total_frames;
+		return;
 	}
 
-	// スプライトを非表示に初期化
-	HideGhost();
+	// --- 2. QL時: SELECT+L なら直前の走りでゴーストを更新 ---
+	if(mode == GHOST_RESET_UPDATE){
+		if(is_recording && rec_frame > 0){
+			rec_run->total_frames = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
+		}
+
+		// 二重バッファをスワップ (直前の走りを次回再生用に即時切り替え)
+		GhostRun* tmp = rec_run;
+		rec_run = play_run;
+		play_run = tmp;
+	}
+
+	// --- 3. QL共通: 記録側初期化および再生位置のリセット ---
+	rec_run->floor_count = 1;
+	rec_run->floor_starts[0] = 0; // 第1フロアは0フレームから
+	rec_run->total_frames = 0;
+
+	rec_frame = 0;
+	play_frame = 0;
+	play_floor_idx = 0;
+	is_recording = 1;
 }
 
 // 毎フレーム呼び出される記録・再生・描画処理
@@ -167,10 +169,9 @@ void UpdateGhost(void){
 
 	// --- 2. 再生・描画処理 ---
 	// 現在フロアの終端フレーム (次フロアの開始フレーム、または総フレーム数)
-	uint32_t play_floor_end = play_run->total_frames;
-	if(play_floor_idx + 1 < play_run->floor_count){
-		play_floor_end = play_run->floor_starts[play_floor_idx + 1];
-	}
+	uint32_t play_floor_end = (play_floor_idx + 1 < play_run->floor_count)
+		? play_run->floor_starts[play_floor_idx + 1]
+		: play_run->total_frames;
 
 	// 現在フロアの範囲内のみ再生 (ゴーストが先にフロアを抜けた場合は待機)
 	if(play_floor_idx < play_run->floor_count && play_frame < play_floor_end){
