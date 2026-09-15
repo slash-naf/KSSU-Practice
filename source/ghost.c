@@ -10,6 +10,7 @@
 #define GHOST_BUF_A ((uint32_t*)0x02F10000)
 #define GHOST_BUF_B ((uint32_t*)0x02F20000)
 #define MAX_GHOST_FRAMES 16000 // 64KBバッファ(16384ワード)に収まる最大フレーム数 (約4.4分)
+#define MAX_FLOORS       32    // 1走あたりに記録可能な最大フロア数
 
 // DS 画面解像度およびカリングマージン
 #define SCREEN_WIDTH   256
@@ -56,10 +57,18 @@ typedef struct {
 static uint32_t* rec_buf = GHOST_BUF_A;
 static uint32_t* play_buf = GHOST_BUF_B;
 
-// 実行状態
-static uint32_t current_frame = 0;
+// 実行状態 (記録と再生で独立したフレームカウンタを管理)
+static uint32_t rec_frame = 0;
+static uint32_t play_frame = 0;
 static uint32_t play_total_frames = 0;
-static uint8_t is_recording = 0;
+static uint8_t is_recording = 1;
+
+// フロア開始フレーム管理 (フロア遷移時の開始タイミング同期用)
+static uint32_t rec_floor_starts[MAX_FLOORS] = {0};
+static uint32_t play_floor_starts[MAX_FLOORS] = {0};
+static uint32_t rec_floor_count = 1; // 第1フロア(インデックス0)を登録済み
+static uint32_t play_floor_count = 0;
+static uint32_t play_floor_idx = 0;
 
 // ============================================================================
 // 内部関数 (ヘルパー)
@@ -87,25 +96,57 @@ static inline void ShowGhost(int screen_x, int screen_y){
 // 公開インターフェース
 // ============================================================================
 
-// QL時に呼び出されるリセット処理 (直前走りをスワップしてゴースト自動ループ再生)
-void ResetGhost(void){
-	// 直前の走りの記録フレーム数をバッファ先頭に保存
-	if(is_recording && current_frame > 0){
-		rec_buf[0] = current_frame;
+// リセットおよびフロア開始同期処理
+// is_ql != 0: QLによるリセット (直前走りを確定・スワップしてループ再生・0フレームから新規記録開始)
+// is_ql == 0: 通常フロア遷移 (新フロア開始点へ再生フレームを同期し、新フロアの記録開始点をマーク)
+void ResetGhost(int is_ql){
+	if(is_ql){
+		// 直前の走りの記録フレーム数をバッファ先頭に保存
+		if(is_recording && rec_frame > 0){
+			rec_buf[0] = rec_frame;
+		}
+
+		// 二重バッファをスワップ (直前の走りを次回再生用に切り替え)
+		uint32_t* tmp = rec_buf;
+		rec_buf = play_buf;
+		play_buf = tmp;
+
+		// 再生バッファの記録フレーム数を取得 (メモリ未初期化等の不正値ガード)
+		uint32_t count = play_buf[0];
+		play_total_frames = (count <= MAX_GHOST_FRAMES) ? count : 0;
+
+		// フロア開始フレームテーブルの引き継ぎ
+		for(uint32_t i = 0; i < rec_floor_count && i < MAX_FLOORS; i++){
+			play_floor_starts[i] = rec_floor_starts[i];
+		}
+		play_floor_count = rec_floor_count;
+
+		// カウンタおよびフロアインデックスを初期化して新規記録を開始
+		rec_frame = 0;
+		play_frame = 0;
+		play_floor_idx = 0;
+		rec_floor_count = 1;
+		rec_floor_starts[0] = 0; // 第1フロアの開始は0フレーム
+		is_recording = 1;
+	}else{
+		// 通常フロア遷移時: 記録側に新フロア開始フレームを登録
+		if(rec_floor_count == 0){
+			rec_floor_starts[0] = 0;
+			rec_floor_count = 1;
+		}
+		if(is_recording && rec_floor_count < MAX_FLOORS){
+			rec_floor_starts[rec_floor_count++] = rec_frame;
+		}
+
+		// 再生側: 次フロアの開始フレームへ同期 (ジャンプ)
+		play_floor_idx++;
+		if(play_floor_idx < play_floor_count){
+			play_frame = play_floor_starts[play_floor_idx];
+		}else{
+			// 過去の走りがこのフロアに達していなければ再生終了
+			play_frame = play_total_frames;
+		}
 	}
-
-	// 二重バッファをスワップ (直前の走りを次回再生用に切り替え)
-	uint32_t* tmp = rec_buf;
-	rec_buf = play_buf;
-	play_buf = tmp;
-
-	// 再生バッファの記録フレーム数を取得 (メモリ未初期化等の不正値ガード)
-	uint32_t count = play_buf[0];
-	play_total_frames = (count <= MAX_GHOST_FRAMES) ? count : 0;
-
-	// カウンタを初期化して新規記録を開始
-	current_frame = 0;
-	is_recording = 1;
 
 	// スプライトを非表示に初期化
 	HideGhost();
@@ -126,13 +167,21 @@ void UpdateGhost(void){
 	}
 
 	// --- 1. 記録処理 ---
-	if(is_recording && current_frame < MAX_GHOST_FRAMES){
-		rec_buf[1 + current_frame] = cur_pos;
+	if(is_recording && rec_frame < MAX_GHOST_FRAMES){
+		rec_buf[1 + rec_frame] = cur_pos;
+		rec_frame++;
 	}
 
 	// --- 2. 再生・描画処理 ---
-	if(current_frame < play_total_frames){
-		uint32_t ghost_pos = play_buf[1 + current_frame];
+	// 現在フロアの終端フレーム (次フロアの開始フレーム、または総フレーム数)
+	uint32_t play_floor_end = play_total_frames;
+	if(play_floor_idx + 1 < play_floor_count){
+		play_floor_end = play_floor_starts[play_floor_idx + 1];
+	}
+
+	// 現在フロアの範囲内のみ再生 (ゴーストが先にフロアを抜けた場合は待機)
+	if(play_floor_idx < play_floor_count && play_frame < play_floor_end){
+		uint32_t ghost_pos = play_buf[1 + play_frame];
 		uint32_t cam = cameraPos;
 
 		// 画面内描画座標 (ワールド座標 - カメラ座標、16x16星の中心合わせ -8ドット)
@@ -146,10 +195,10 @@ void UpdateGhost(void){
 		}else{
 			ShowGhost(g_screen_x, g_screen_y);
 		}
+
+		play_frame++;
 	}else{
-		// 再生データ終端後は非表示
+		// 再生データ終端またはフロア終端後は非表示
 		HideGhost();
 	}
-
-	current_frame++;
 }

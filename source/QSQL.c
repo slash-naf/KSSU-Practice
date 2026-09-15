@@ -74,7 +74,7 @@ void (*p_reset_rng)(void);
 
 //ゴーストモジュール連携用ポインタ (ghostモジュール使用時に設定)
 void (*p_update_ghost)(void);
-void (*p_reset_ghost)(void);
+void (*p_reset_ghost)(int);
 
 // 下画面に表示させる4桁の数値4つ
 uint32_t show[4];
@@ -130,7 +130,7 @@ void QS(void){
 
 				//ゴーストリセット (自動ループ: 直前走りをスワップして再生)
 				if(p_reset_ghost){
-					p_reset_ghost();
+					p_reset_ghost(1);
 				}
 			}else{
 				//無敵キャンディ時間を保持
@@ -140,6 +140,10 @@ void QS(void){
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
 		if(t->sav_pos == 0){	
+			//通常フロア遷移時: ゴーストの開始タイミングを新フロアに同期
+			if(!ql && p_reset_ghost){
+				p_reset_ghost(0);
+			}
 			ql = 0;
 
 			//フロア遷移時の座標と状態
