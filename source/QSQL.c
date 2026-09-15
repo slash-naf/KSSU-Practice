@@ -111,9 +111,6 @@ void QS(void){
 	if(getPos == 0 || getPos == POS_IN_CORKBOARD){
 		//遷移中の最初のフレーム(座標が0になったら)
 		if(t->sav_pos != 0){
-			prev_sav = *t;
-
-			t->sav_pos = 0;
 			prevMusic = music;
 			if(ql){
 				playerInvincibility = ql->sav_playerInvincibility;	//無敵キャンディ時間をロード
@@ -129,17 +126,21 @@ void QS(void){
 					*p_seed_advances = 0;
 				}
 
-				//ゴーストリセット
+				//ゴーストリセット (t->sav_posクリア前にql->sav_posを渡し、Y+R時に0になるのを防止)
 				if(p_reset_ghost){
-					// 1: 通常QL (走りは更新せず維持), 2: SELECT+L (直前の走りでゴースト更新)
+					// 1: 通常QL (走りは更新せず維持), 2: SELECT+L / SELECT+Y+R (直前の走りでゴースト更新)
 					// ロード先の sav_gameStates と sav_pos を渡し、開始地点が異なる場合はゴーストを非表示にする
 					p_reset_ghost(ql_update_ghost ? 2 : 1, ql->sav_gameStates, ql->sav_pos);
 				}
 				ql_update_ghost = 0;
 			}else{
+				//通常フロア遷移時のみ前フロア情報として保持 (QL遷移時にprev_savを上書き破壊しない)
+				prev_sav = *t;
 				//無敵キャンディ時間を保持
 				t->sav_playerInvincibility = playerInvincibility;
 			}
+
+			t->sav_pos = 0;
 		}
 	}else{
 		//遷移後の最初のフレーム(座標が0ではなくなったら)
@@ -382,9 +383,12 @@ void QL(void){
 				}
 			}
 		}
-		//Y押しながらRで一時セーブをQL
+		//Y押しながらRで一時セーブをQL (SELECT+Y+Rでゴースト走りを更新)
 		else if(R & pressedButtons){
 			if(Y & heldButtons){
+				if(SELECT & heldButtons){
+					ql_update_ghost = 1;
+				}
 				//何もしない: sは&tmp_savのまま落ちてロードされる
 			}else{return;}
 		}else{return;}
