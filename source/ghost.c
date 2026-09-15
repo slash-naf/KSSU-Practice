@@ -111,6 +111,7 @@ static GhostRun* play_run = 0;
 static uint32_t rec_frame = 0;
 static uint32_t play_frame = 0;
 static uint32_t play_floor_idx = 0;
+static uint8_t is_rec_valid = 0;  // QL済みでゴースト記録が有効か (未QL時はゴースト機能無効)
 static uint8_t is_play_valid = 0; // 現在のセーブ地点と一致しゴースト再生可能か (1: 再生, 0: 非表示)
 static uint32_t access_clock = 0; // LRU置き換え用タイムスタンプ
 
@@ -214,6 +215,11 @@ static void SaveGhostRun(void){
 
 // 通常フロア遷移時の同期処理
 static inline void SyncFloor(void){
+	// 未QL時、またはまだ記録フレームがない場合は何もしない (初回到達時の誤登録防止)
+	if(!is_rec_valid || rec_frame == 0){
+		return;
+	}
+
 	// 記録側: 新フロア開始フレームを登録
 	if(rec_run->floor_count < MAX_FLOORS){
 		rec_run->floor_starts[rec_run->floor_count++] = rec_frame;
@@ -245,13 +251,8 @@ void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 		return;
 	}
 
-	// --- 2. QL時: SELECT+L なら直前の走りを該当開始地点のスロットに保存 ---
-	if(mode == GHOST_RESET_UPDATE && rec_frame > 0){
-		// 未QL状態からの初回走行の場合、今回のロード先を開始地点情報として補正
-		if(rec_run->start_game_states == 0 && rec_run->start_pos == 0){
-			rec_run->start_game_states = game_states;
-			rec_run->start_pos = pos;
-		}
+	// --- 2. QL時: SELECT+L かつ記録有効時なら直前の走りを該当開始地点のスロットに保存 ---
+	if(mode == GHOST_RESET_UPDATE && is_rec_valid && rec_frame > 0){
 		SaveGhostRun();
 	}
 
@@ -267,12 +268,13 @@ void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 	rec_frame = 0;
 	play_frame = 0;
 	play_floor_idx = 0;
+	is_rec_valid = 1; // QLされたので記録を有効化
 }
 
 // 毎フレーム呼び出される記録・再生・描画処理
 void UpdateGhost(void){
-	// アクションパート中以外は何もしない
-	if(gameState != STATE_PLAY){
+	// アクションパート中以外、または未QL状態は何もしない
+	if(gameState != STATE_PLAY || !is_rec_valid){
 		return;
 	}
 
