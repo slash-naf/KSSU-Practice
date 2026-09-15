@@ -24,9 +24,8 @@ SeedAdvances advances;
 // show[3]: seed (現在の乱数)
 uint32_t* p_show;
 
-// ログ出力用ポインタ (Log Dumpチート有効時に設定)
+// ログ出力用ポインタ (Log Dumpチート有効時に設定, 容量は symbols.h に定義)
 uint32_t* p_log_buffer;
-#define LOG_MAX_WORDS 0x4000 // ログバッファ容量 (16Kワード = 64KB, log_dump.c の定義と一致)
 
 // ログエントリの記録 (32bit 2ワード、先頭1ワードはログワード数)
 static inline void LogEntry(uint32_t w1, uint32_t w2){

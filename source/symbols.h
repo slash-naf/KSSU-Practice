@@ -148,6 +148,9 @@ enum Pos{
 #define helperRode              (*(uint8_t*)0x020BAB39)     // ウィリーライダーなら2
 #define helperInvincibility     (*(uint16_t*)0x020BADE8)    // 2Pのむてきキャンディの残り時間
 
+// ログ出力設定
+#define LOG_MAX_WORDS           0x4000                      // 16Kワード (64KB, 最大8,191イベント)
+
 // その他
 #define menuPageIdx             (*(uint8_t*)0x021983CA)     // ポーズのメニューのページ番号
 #define heldButtons             (*(uint16_t*)0x02041E64)   // 押しているボタンに対応するビットが1になる
