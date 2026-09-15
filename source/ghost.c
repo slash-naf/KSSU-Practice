@@ -156,41 +156,49 @@ static GhostRun* FindSavedRun(uint32_t game_states, uint32_t pos){
 
 // 保存先スロットを取得する (既存一致 -> 空きスロット -> 最古LRUスロット)
 static GhostRun* AllocateSaveSlot(uint32_t game_states, uint32_t pos){
-	// 1. 同一開始地点の既存スロットがあれば再利用
-	GhostRun* existing = FindSavedRun(game_states, pos);
-	if(existing){
-		return existing;
-	}
-
-	// 2. 空きスロットがあれば割り当て
 	GhostRun* oldest = &saved_runs[0];
+	GhostRun* empty = 0;
+
 	for(int i = 0; i < MAX_SAVED_RUNS; i++){
-		if(saved_runs[i].total_frames == 0){
-			return &saved_runs[i];
+		GhostRun* r = &saved_runs[i];
+
+		// 1. 同一開始地点の既存スロットがあれば最優先で再利用
+		if(r->total_frames > 0 && r->start_game_states == game_states && r->start_pos == pos){
+			return r;
 		}
-		if(saved_runs[i].last_used < oldest->last_used){
-			oldest = &saved_runs[i];
+		// 2. 空きスロットがあれば保持 (最初に見つかったスロット)
+		if(r->total_frames == 0 && !empty){
+			empty = r;
+		}
+		// 3. 全スロット使用中の場合に備えて最古スロットを追跡
+		if(r->last_used < oldest->last_used){
+			oldest = r;
 		}
 	}
 
-	// 3. 全スロット使用中の場合は最古 (LRU) スロットを上書き
-	return oldest;
+	return empty ? empty : oldest;
+}
+
+// 走行メタデータをターゲットスロットにコピーする (libcのmemcpy非依存)
+static inline void CopyRunMetadata(GhostRun* dst, const GhostRun* src, uint32_t total_frames){
+	dst->start_game_states = src->start_game_states;
+	dst->start_pos         = src->start_pos;
+	dst->floor_count       = src->floor_count;
+	dst->total_frames      = total_frames;
+	for(uint32_t i = 0; i < src->floor_count; i++){
+		dst->floor_starts[i] = src->floor_starts[i];
+	}
+	dst->last_used = ++access_clock;
 }
 
 // 直前の記録走行を開始地点スロットに保存・更新する (バッファポインタをスワップして O(1) で即時完了)
 static void SaveGhostRun(void){
 	GhostRun* target = AllocateSaveSlot(rec_run->start_game_states, rec_run->start_pos);
+	uint32_t frames  = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
 
-	target->start_game_states = rec_run->start_game_states;
-	target->start_pos         = rec_run->start_pos;
-	target->floor_count       = rec_run->floor_count;
-	target->total_frames      = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
-	for(uint32_t i = 0; i < rec_run->floor_count; i++){
-		target->floor_starts[i] = rec_run->floor_starts[i];
-	}
-	target->last_used = ++access_clock;
+	// メタデータをコピーし、バッファポインタをスワップ (64KBの配列コピーなし)
+	CopyRunMetadata(target, rec_run, frames);
 
-	// バッファポインタをスワップ (64KBの配列コピーを行わず、ポインタ交換で即時保存)
 	uint32_t* tmp_buf = target->buf;
 	target->buf       = rec_run->buf;
 	rec_run->buf      = tmp_buf;
@@ -241,12 +249,9 @@ void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 
 	// --- 3. ロード先に対応する保存済みゴーストを検索 ---
 	play_run = FindSavedRun(game_states, pos);
-	if(play_run && play_run->total_frames > 0){
+	is_play_valid = (play_run != 0);
+	if(play_run){
 		play_run->last_used = ++access_clock;
-		is_play_valid = 1;
-	}else{
-		play_run = 0;
-		is_play_valid = 0;
 	}
 
 	// --- 4. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
