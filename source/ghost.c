@@ -56,7 +56,6 @@ typedef struct {
 // ============================================================================
 
 typedef struct {
-	uint32_t* buf;                     // 座標データバッファへのポインタ
 	uint32_t floor_starts[MAX_FLOORS]; // 各フロアの開始フレーム番号
 	uint32_t floor_count;              // 記録されたフロア数
 	uint32_t total_frames;             // 総記録フレーム数 (0なら未使用スロット)
@@ -69,36 +68,26 @@ typedef struct {
 // 状態変数
 // ============================================================================
 
-// 記録用ワークデータ (インデックス 0 のバッファを使用)
-static GhostRun rec_run_data = { GHOST_BUF(0), {0}, 1, 0, 0, 0, 0 };
-static GhostRun* rec_run = &rec_run_data;
+// 記録用ワークバッファへのポインタ (初期値を持つため data セクションに配置)
+static uint32_t* rec_buf = GHOST_BUF(0);
 
-// 開始地点ごとに保存される走行データプール (インデックス 1〜20 のバッファを使用)
-static GhostRun saved_runs[MAX_SAVED_RUNS] = {
-	{ GHOST_BUF(1),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(2),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(3),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(4),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(5),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(6),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(7),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(8),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(9),  {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(10), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(11), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(12), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(13), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(14), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(15), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(16), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(17), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(18), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(19), {0}, 0, 0, 0, 0, 0 },
-	{ GHOST_BUF(20), {0}, 0, 0, 0, 0, 0 },
+// 開始地点ごとに保存されるバッファポインタプール (スワップ用。初期値を持つため data セクションに配置: 20*4=80バイト)
+static uint32_t* saved_bufs[MAX_SAVED_RUNS] = {
+	GHOST_BUF(1),  GHOST_BUF(2),  GHOST_BUF(3),  GHOST_BUF(4),  GHOST_BUF(5),
+	GHOST_BUF(6),  GHOST_BUF(7),  GHOST_BUF(8),  GHOST_BUF(9),  GHOST_BUF(10),
+	GHOST_BUF(11), GHOST_BUF(12), GHOST_BUF(13), GHOST_BUF(14), GHOST_BUF(15),
+	GHOST_BUF(16), GHOST_BUF(17), GHOST_BUF(18), GHOST_BUF(19), GHOST_BUF(20),
 };
 
-// 再生中の走行データへのポインタ (NULLなら再生対象なし)
+// 記録用ワークメタデータ (BSS セクションに配置)
+static GhostRun rec_run;
+
+// 開始地点ごとに保存される走行メタデータプール (初期化子なしのため BSS セクションに配置: 2,880バイト)
+static GhostRun saved_runs[MAX_SAVED_RUNS];
+
+// 再生中の走行データへのポインタおよびバッファ (NULLなら再生対象なし)
 static GhostRun* play_run = 0;
+static uint32_t* play_buf = 0;
 
 // 実行状態
 static uint32_t rec_frame = 0;
@@ -195,15 +184,16 @@ static inline void CopyRunMetadata(GhostRun* dst, const GhostRun* src, uint32_t 
 
 // 直前の記録走行を開始地点スロットに保存・更新する (バッファポインタをスワップして O(1) で即時完了)
 static void SaveGhostRun(void){
-	GhostRun* target = AllocateSaveSlot(rec_run->start_game_states, rec_run->start_pos);
+	GhostRun* target = AllocateSaveSlot(rec_run.start_game_states, rec_run.start_pos);
 	uint32_t frames  = (rec_frame <= MAX_GHOST_FRAMES) ? rec_frame : MAX_GHOST_FRAMES;
 
 	// メタデータをコピーし、バッファポインタをスワップ (64KBの配列コピーなし)
-	CopyRunMetadata(target, rec_run, frames);
+	CopyRunMetadata(target, &rec_run, frames);
 
-	uint32_t* tmp_buf = target->buf;
-	target->buf       = rec_run->buf;
-	rec_run->buf      = tmp_buf;
+	int slot_idx         = target - saved_runs;
+	uint32_t* tmp_buf    = saved_bufs[slot_idx];
+	saved_bufs[slot_idx] = rec_buf;
+	rec_buf              = tmp_buf;
 }
 
 // 通常フロア遷移時の同期処理
@@ -214,8 +204,8 @@ static inline void SyncFloor(void){
 	}
 
 	// 記録側: 新フロア開始フレームを登録
-	if(rec_run->floor_count < MAX_FLOORS){
-		rec_run->floor_starts[rec_run->floor_count++] = rec_frame;
+	if(rec_run.floor_count < MAX_FLOORS){
+		rec_run.floor_starts[rec_run.floor_count++] = rec_frame;
 	}
 
 	// 再生側: 次フロアの開始フレームへ同期 (ジャンプ)
@@ -243,6 +233,7 @@ void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 		is_rec_valid = 0;
 		rec_frame = 0;
 		play_run = 0;
+		play_buf = 0;
 		is_play_valid = 0;
 		play_frame = 0;
 		play_floor_idx = 0;
@@ -265,10 +256,13 @@ void ResetGhost(int mode, uint32_t game_states, uint32_t pos){
 	is_play_valid = (play_run != 0);
 	if(play_run){
 		play_run->last_used = ++access_clock;
+		play_buf = saved_bufs[play_run - saved_runs];
+	}else{
+		play_buf = 0;
 	}
 
 	// --- 5. QL共通: 次回記録用データの初期化および再生カウンタのリセット ---
-	InitGhostRun(rec_run, game_states, pos);
+	InitGhostRun(&rec_run, game_states, pos);
 	rec_frame = 0;
 	play_frame = 0;
 	play_floor_idx = 0;
@@ -291,7 +285,7 @@ void UpdateGhost(void){
 
 	// --- 1. 記録処理 ---
 	if(rec_frame < MAX_GHOST_FRAMES){
-		rec_run->buf[rec_frame++] = cur_pos;
+		rec_buf[rec_frame++] = cur_pos;
 	}
 
 	// --- 2. 再生・描画処理 ---
@@ -312,7 +306,7 @@ void UpdateGhost(void){
 		return;
 	}
 
-	uint32_t ghost_pos = play_run->buf[play_frame++];
+	uint32_t ghost_pos = play_buf[play_frame++];
 	uint32_t cam = cameraPos;
 
 	// 画面内描画座標 (ワールド座標 - カメラ座標、16x16星の中心合わせ)
