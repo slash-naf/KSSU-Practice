@@ -8,7 +8,6 @@ memory = {}
 ---@param address number アドレス
 ---@return number
 function memory.readbyte(address) end
-function memory.readbyteunsigned(address) end -- alias
 
 ---メモリから1バイト読み込む (符号あり)
 ---@param address number アドレス
@@ -19,29 +18,21 @@ function memory.readbytesigned(address) end
 ---@param address number アドレス
 ---@return number
 function memory.readword(address) end
-function memory.readwordunsigned(address) end -- alias
-function memory.readshort(address) end -- alias
-function memory.readshortunsigned(address) end -- alias
 
 ---メモリから2バイト読み込む (符号あり)
 ---@param address number アドレス
 ---@return number
 function memory.readwordsigned(address) end
-function memory.readshortsigned(address) end -- alias
 
 ---メモリから4バイト読み込む (符号なし)
 ---@param address number アドレス
 ---@return number
 function memory.readdword(address) end
-function memory.readdwordunsigned(address) end -- alias
-function memory.readlong(address) end -- alias
-function memory.readlongunsigned(address) end -- alias
 
 ---メモリから4バイト読み込む (符号あり)
 ---@param address number アドレス
 ---@return number
 function memory.readdwordsigned(address) end
-function memory.readlongsigned(address) end -- alias
 
 ---指定した範囲のメモリをバイト文字列として読み込む
 ---@param address number 開始アドレス
@@ -58,13 +49,11 @@ function memory.writebyte(address, value) end
 ---@param address number アドレス
 ---@param value number 値
 function memory.writeword(address, value) end
-function memory.writeshort(address, value) end -- alias
 
 ---メモリに4バイト書き込む
 ---@param address number アドレス
 ---@param value number 値
 function memory.writedword(address, value) end
-function memory.writelong(address, value) end -- alias
 
 ---アドレスが有効かどうかを確認する
 ---@param address number アドレス
@@ -95,7 +84,6 @@ function memory.vram_writeword(address, value) end
 ---@param address number 監視するアドレス
 ---@param func? function|nil コールバック関数 (引数なし)。nilで解除。
 function memory.registerwrite(address, func) end
-function memory.register(address, func) end -- alias
 
 ---メモリ読み込み時に呼び出される関数を登録する (フック)
 ---@param address number 監視するアドレス
@@ -106,8 +94,6 @@ function memory.registerread(address, func) end
 ---@param address number 監視するアドレス
 ---@param func? function|nil コールバック関数 (引数なし)。nilで解除。
 function memory.registerexec(address, func) end
-function memory.registerrun(address, func) end -- alias
-function memory.registerexecute(address, func) end -- alias
 
 ---@class emu
 emu = {}
