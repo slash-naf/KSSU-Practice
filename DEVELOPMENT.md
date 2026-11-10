@@ -72,8 +72,8 @@ Action Replayコードの即時実行には、Luaスクリプト機能を備え�
 
 ## C言語のコードをAction Replayコードに変換する仕組み
 
-ビルドとAction Replayコードの生成は **TypeScript** (`src/`) が担当する。
-Lua (`exec.lua` / `ActionReplay.lua`) はTypeScriptが生成したARコードを読み込み、DeSmuME上で実行するだけにしている。
+ビルドとAction Replayコードの生成は **TypeScript** (`build.ts` / `tools/scripts/`) が担当する。
+Lua (`exec.lua` / `tools/lua/ActionReplay.lua`) はTypeScriptが生成したARコードを読み込み、DeSmuME上で実行するだけにしている。
 
 ### コンパイルとリンク
 
@@ -111,27 +111,32 @@ XXXXXXXX: E92D5FFF  ; stmdb r13!,{r0-r12,r14}; レジスタの退避(状態を�
 
 ```text
 KSSU-Practice/
+├── build.ts             # ビルド設定・チート一覧・出力処理
+├── exec.lua             # ユーザ用：ビルド実行＆実行設定スクリプト
+├── makefile             # コンパイル設定ファイル
+├── linker.ld            # メモリ配置設定ファイル
+├── dump_to_json.mjs     # ログのJSON変換ツール
 ├── source/              # C言語のソースコードを入れる場所
 │   ├── QSQL.c           # クイックセーブ・クイックロード機能
 │   ├── ghost.c          # ゴースト機能
 │   ├── seed_advances.c  # 乱数監視機能
 │   ├── log_dump.c       # 乱数ログ記録機能
 │   └── symbols.h        # ゲーム内アドレス・定数の定義
-├── src/                 # ビルド＆ARコード生成エンジン (TypeScript)
-│   ├── build.ts         # ビルド設定・チート一覧・出力処理
-│   ├── ar.ts            # モジュール配置・フック・ARコード生成
-│   └── formats/         # 出力フォーマット (.dct / usrcheat.dat)
-├── ActionReplay.lua     # 生成済みARコードの読み込みと実行
-├── exec.lua             # ユーザ用：ビルド実行＆実行設定スクリプト
-├── makefile             # コンパイル設定ファイル
-├── linker.ld            # メモリ配置設定ファイル
-├── package.json         # npm スクリプト・依存パッケージ
-├── tsconfig.json        # TypeScript 設定
+├── tools/               # 開発用の内部ファイル
+│   ├── scripts/         # ビルド＆ARコード生成エンジン (TypeScript)
+│   │   ├── ar.ts        # モジュール配置・フック・ARコード生成
+│   │   └── formats/     # 出力フォーマット (.dct / usrcheat.dat)
+│   └── lua/             # Lua 実行用モジュール・API定義
+│       ├── ActionReplay.lua  # 生成済みARコードの読み込みと実行
+│       └── desmume_api.lua   # Lua Language Server 用のAPI定義
 ├── dist/                # 生成物 (Git管理外)
 │   ├── KIRBY_USDX_J_YKWJ01_00.dct
 │   └── usrcheat.dat
-└── build/               # 中間ファイル・実行用ARコード (Git管理外)
-    └── cheats.ar
+├── build/               # 中間ファイル・実行用ARコード (Git管理外)
+│   └── cheats.ar
+├── package.json         # npm スクリプト・依存パッケージ
+├── tsconfig.json        # TypeScript 設定
+└── compile_flags.txt    # clangd 用コンパイル設定
 ```
 
 ### 各ファイルの役割
@@ -148,10 +153,10 @@ DeSmuME上で実行するメインLuaスクリプト。
 TypeScriptのビルドを実行し、生成されたARコードを読み込んで毎フレーム適用する。
 
 ```lua
-local ar = require("ActionReplay")
+local ar = dofile("tools/lua/ActionReplay.lua")
 
 -- TypeScript でビルド・コード生成を行う
-local build_command = "node --experimental-strip-types src/build.ts"
+local build_command = "node --experimental-strip-types build.ts"
 print(build_command)
 
 local status = os.execute(build_command)
@@ -172,7 +177,7 @@ gui.register(function()
 end)
 ```
 
-#### `src/build.ts`
+#### `build.ts`
 ビルド設定とチートの一覧を記述するメインスクリプト。
 メモリ配置、モジュールの読み込み、フックの設定、各チートの生成、`.dct` / `usrcheat.dat` の出力をここで行う。
 
@@ -182,9 +187,9 @@ end)
 
 ```ts
 import { fileURLToPath } from "node:url";
-import { allocateRam, newCode } from "./ar.ts";
+import { allocateRam, newCode } from "./tools/scripts/ar.ts";
 
-const rootDir = fileURLToPath(new URL("..", import.meta.url));
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 // メモリ管理マネージャの作成 (コード開始, BSS開始, メモリ終端)
 const ram = allocateRam(rootDir, 0x022C0000, 0x022C2000, 0x02368000);
@@ -199,21 +204,24 @@ const qsql = newCode().importModule(qsqlMod);
 cheats.push({ name: "QSQL", enabled: true, runtime: true, code: qsql });
 ```
 
-#### `src/ar.ts`
+#### `tools/scripts/ar.ts`
 TypeScript版のビルド＆ARコード生成エンジン。
 - **コマンドの実行**: `make` コマンドを呼び出し、C言語ファイルをコンパイル・リンクさせる。
 - **バイナリの抽出**: 生成された `.bin` ファイルとシンボル情報を読み込む。
 - **ARコード生成**: バイナリデータをAction Replayの形式 (Eコードなど) に変換。
 
-#### `src/formats/`
+#### `tools/scripts/formats/`
 出力フォーマットの実装。
 - `dct.ts`: DeSmuME用チートファイル (`.dct`) の書き出し。
 - `usrcheat.ts`: R4用チートデータベース (`usrcheat.dat`) の書き出し。
 
-#### `ActionReplay.lua`
+#### `tools/lua/ActionReplay.lua`
 生成済みARコードの読み込みと実行のみを行うモジュール。
 - **ARコードの読み込み**: `build/cheats.ar` を解析してチートごとのコード列にする。
 - **エミュレータへの注入**: 読み込んだコードを DeSmuME のメモリに直接書き込み、効果を発揮させる。
+
+#### `tools/lua/desmume_api.lua`
+Lua Language Server 向けのDeSmuME Lua API定義。編集ツールの補完用であり、実行時には使用しない。
 
 #### `linker.ld`
 リンカスクリプト。各セクション（`.text`, `.rodata`, `.data`, `.bss`）のメモリ配置設定を行うほか、ゲームの既存の関数のアドレスはここに書く。
@@ -240,7 +248,7 @@ TypeScript版のビルド＆ARコード生成エンジン。
 
 #### `makefile`
 通常は編集する必要はない。
-`src/ar.ts` から `make SRC=... ADDR=... BSS=...` のように引数付きで呼び出され、指定されたソースコードを指定されたアドレス向けにビルドするように設計されている。
+`tools/scripts/ar.ts` から `make SRC=... ADDR=... BSS=...` のように引数付きで呼び出され、指定されたソースコードを指定されたアドレス向けにビルドするように設計されている。
 
 ## ベアメタル
 
@@ -263,7 +271,7 @@ C言語で `/` や `%` を使用すると、コンパイラが暗黙に `__aeabi
 ## 開発ワークフロー
 
 C言語でコードを書き、それをゲーム内で実行するまでの一連の流れ（開発サイクル）を解説。
-前提として、`src/`、`exec.lua`、`ActionReplay.lua`、`makefile`、`linker.ld`、`package.json` を作業フォルダに配置し、`npm install` を実行しておく必要がある。
+前提として、`build.ts`、`exec.lua`、`tools/`、`makefile`、`linker.ld`、`package.json` を作業フォルダに配置し、`npm install` を実行しておく必要がある。
 
 ### コーディング
 
@@ -284,9 +292,9 @@ void RunMyCode(int32_t* r) {
 
 ### フックとパッチ設定
 
-`src/build.ts` を開き、作成したファイルを読み込んでフックする設定を記述する。
+`build.ts` を開き、作成したファイルを読み込んでフックする設定を記述する。
 
-[`src/ar.ts`](src/ar.ts) は用途に応じた複数のフック・パッチメソッドを提供する：
+[`tools/scripts/ar.ts`](tools/scripts/ar.ts) は用途に応じた複数のフック・パッチメソッドを提供する：
 
 #### `hook(funcName, hookAddr, originalCode, [retInfo])`
 指定アドレスの命令を自作関数呼び出しへ割り込ませる。トランポリンコードがレジスタの退避と復帰を自動で行う。
@@ -324,7 +332,7 @@ const myCode = newCode().importModule(myMod);
 npm run build
 ```
 
-内部的には `node --experimental-strip-types src/build.ts` が実行され、CソースのコンパイルとARコードの生成が行われる。
+内部的には `node --experimental-strip-types build.ts` が実行され、CソースのコンパイルとARコードの生成が行われる。
 型チェックのみ行う場合は以下を実行する。
 
 ```bash
@@ -338,11 +346,11 @@ DeSmuME を起動し、ゲームを読み込む。
 1. メニューの `Tools` > `Lua Scripting` > `New Lua Script Window` を開く。
 2. `Browse...` をクリックし、`exec.lua` を選択して開く。
 3. 自動的にビルドが実行される。
-   - `exec.lua` が `node --experimental-strip-types src/build.ts` を呼び出す。`node` にPATHが通っていること、カレントディレクトリがプロジェクトのルートであることを確認する。
+   - `exec.lua` が `node --experimental-strip-types build.ts` を呼び出す。`node` にPATHが通っていること、カレントディレクトリがプロジェクトのルートであることを確認する。
    - ビルドログが表示される。エラーがあればここに表示されるため確認する。
 4. ビルドが成功すると、`build/cheats.ar` が読み込まれ、即座にゲーム内にコードが適用される。
    - 生成されたコードがエミュレータ上のメモリへ即座に注入されるため、外部チート機能に手動登録する必要はない。
-   - ソースコードや `src/build.ts` を修正したら、Luaウィンドウの `Restart` ボタンを押すだけで再ビルド・再適用される。その後チートが実行されていない状態をQLすればメモリが新しい処理に書き換わる。
+   - ソースコードや `build.ts` を修正したら、Luaウィンドウの `Restart` ボタンを押すだけで再ビルド・再適用される。その後チートが実行されていない状態をQLすればメモリが新しい処理に書き換わる。
 
 ### 完成コードの出力
 
@@ -351,7 +359,7 @@ DeSmuME を起動し、ゲームを読み込む。
 - `dist/KIRBY_USDX_J_YKWJ01_00.dct`: DeSmuME用のチートファイル。
 - `dist/usrcheat.dat`: R4等のフラッシュカード用チートデータベース。実機ではこれをSDカードに配置して使用する。
 
-出力内容は `src/build.ts` のチート一覧で管理されている。Luaの実行ログにはコード全文は出力されず、`build/cheats.ar` を介して実行される。
+出力内容は `build.ts` のチート一覧で管理されている。Luaの実行ログにはコード全文は出力されず、`build/cheats.ar` を介して実行される。
 
 ## Action Replayコードの仕組み
 

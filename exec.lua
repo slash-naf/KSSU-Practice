@@ -1,7 +1,7 @@
-local ar = require("ActionReplay")
+local ar = dofile("tools/lua/ActionReplay.lua")
 
 -- TypeScript でビルド・コード生成を行う
-local build_command = "node --experimental-strip-types src/build.ts"
+local build_command = "node --experimental-strip-types build.ts"
 print(build_command)
 
 local status = os.execute(build_command)

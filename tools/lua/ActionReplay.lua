@@ -1,5 +1,5 @@
 --- ActionReplay コードの読み込みと実行
--- ビルド・コード生成は TypeScript (src/build.ts) が行い、
+-- ビルド・コード生成は TypeScript (build.ts / tools/scripts) が行い、
 -- Lua 側は生成されたコードを読み込んで DeSmuME 上で実行するだけにしている。
 
 local M = {}

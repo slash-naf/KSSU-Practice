@@ -2,18 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { allocateRam, newCode } from "./ar.ts";
-import type { CodeBuilder } from "./ar.ts";
-import { writeDct } from "./formats/dct.ts";
-import type { GeneratedCheat } from "./formats/types.ts";
-import { writeUsrCheat } from "./formats/usrcheat.ts";
+import { allocateRam, newCode } from "./tools/scripts/ar.ts";
+import type { CodeBuilder } from "./tools/scripts/ar.ts";
+import { writeDct } from "./tools/scripts/formats/dct.ts";
+import type { GeneratedCheat } from "./tools/scripts/formats/types.ts";
+import { writeUsrCheat } from "./tools/scripts/formats/usrcheat.ts";
 
 interface Cheat extends GeneratedCheat {
 	code: CodeBuilder;
 	runtime: boolean;
 }
 
-const rootDir = fileURLToPath(new URL("..", import.meta.url));
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 // メモリ管理マネージャの作成 (コード開始, BSS開始, メモリ終端)
 const ram = allocateRam(rootDir, 0x022c0000, 0x022c2000, 0x02368000);
