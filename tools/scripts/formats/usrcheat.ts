@@ -1,10 +1,7 @@
-import type { GeneratedCheat } from "./types.ts";
+import type { Game, GeneratedCheat } from "./game.ts";
 
 const HEADER_SIZE = 0x100;
-const GAME_ID = "YKWJ";
-const GAME_CRC = 0x776dde8f;
-const GAME_NAME = "KIRBY USDX J\n";
-const DATABASE_NAME = "KSSU-Practice v3.3";
+const GAME_POINTER_SIZE = 0x10;
 const GAME_ENABLED_FLAG = 0xf000;
 const CHEAT_ENABLED_FLAG = 0x0100;
 
@@ -45,42 +42,61 @@ function writeCheat(cheat: GeneratedCheat): Buffer[] {
 	return [itemHeader, nameAndComment, codeLength, code];
 }
 
-/** R4 形式の usrcheat.dat を生成する */
-export function writeUsrCheat(cheats: readonly GeneratedCheat[]): Buffer {
-	const header = Buffer.alloc(HEADER_SIZE);
-	header.write("R4 CheatCode", 0, "ascii");
-	header.writeUInt32LE(HEADER_SIZE, 0x0c);
-	header.write(DATABASE_NAME, 0x10, "ascii");
-	header.write("UsAY", 0x4c, "ascii"); // UTF-8
-	header[0x50] = 1; // チート有効
-
-	// ゲームポインタ + 16byte の終端ブロック
-	const gameOffset = HEADER_SIZE + 0x10 + 0x10;
-	const pointer = Buffer.alloc(0x10);
-	pointer.write(GAME_ID, 0, "ascii");
-	pointer.writeUInt32LE(GAME_CRC, 4);
-	pointer.writeUInt32LE(gameOffset, 8);
-
+/** 1ゲーム分のチートデータブロックを生成する */
+function writeGame(game: Game<GeneratedCheat>): Buffer {
 	const gameHeader = Buffer.alloc(4);
-	gameHeader.writeUInt16LE(cheats.length, 0);
+	gameHeader.writeUInt16LE(game.cheats.length, 0);
 	gameHeader.writeUInt16LE(GAME_ENABLED_FLAG, 2);
 
 	const masterCode = Buffer.alloc(32);
 	masterCode.writeUInt32LE(1, 4); // 既定値: 00000000 00000001 ...
 
-	const gameParts: Buffer[] = [
-		writeString(GAME_NAME),
+	const parts: Buffer[] = [
+		writeString(`${game.name}\n`),
 		gameHeader,
 		masterCode,
 	];
-	for (const cheat of cheats) {
-		gameParts.push(...writeCheat(cheat));
+	for (const cheat of game.cheats) {
+		parts.push(...writeCheat(cheat));
+	}
+	return Buffer.concat(parts);
+}
+
+/** 複数ゲームを含む R4 形式の usrcheat.dat を生成する */
+export function writeUsrCheat(
+	databaseName: string,
+	games: readonly Game<GeneratedCheat>[],
+): Buffer {
+	const header = Buffer.alloc(HEADER_SIZE);
+	header.write("R4 CheatCode", 0, "ascii");
+	header.writeUInt32LE(HEADER_SIZE, 0x0c);
+	header.write(databaseName, 0x10, "ascii");
+	header.write("UsAY", 0x4c, "ascii"); // UTF-8
+	header[0x50] = 1; // チート有効
+
+	// ゲームポインタの直後に 16byte の終端ブロックを置く
+	const firstGameOffset = HEADER_SIZE + (games.length + 1) * GAME_POINTER_SIZE;
+
+	const bodies = games.map(writeGame);
+	const pointers: Buffer[] = [];
+	let offset = firstGameOffset;
+	for (let i = 0; i < games.length; i++) {
+		const game = games[i];
+		const body = bodies[i];
+
+		const pointer = Buffer.alloc(GAME_POINTER_SIZE);
+		pointer.write(game.id, 0, "ascii");
+		pointer.writeUInt32LE(game.crc >>> 0, 4);
+		pointer.writeUInt32LE(offset, 8);
+		pointers.push(pointer);
+
+		offset += body.length;
 	}
 
 	return Buffer.concat([
 		header,
-		pointer,
-		Buffer.alloc(0x10),
-		...gameParts,
+		...pointers,
+		Buffer.alloc(GAME_POINTER_SIZE),
+		...bodies,
 	]);
 }

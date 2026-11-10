@@ -1,19 +1,19 @@
-import type { GeneratedCheat } from "./types.ts";
+import type { Game, GeneratedCheat } from "./game.ts";
 
 const hex8 = (value: number): string =>
 	(value >>> 0).toString(16).toUpperCase().padStart(8, "0");
 
-/** DeSmuME 用チートファイル (.dct) を生成する */
-export function writeDct(cheats: readonly GeneratedCheat[]): string {
+/** 1ゲーム分の DeSmuME 用チートファイル (.dct) を生成する */
+export function writeDct(game: Game<GeneratedCheat>): string {
 	const lines = [
 		"; DeSmuME cheats file. VERSION 2.000",
-		"Name=KIRBY USDX J",
-		"Serial=NTR-YKWJ-JPN",
+		`Name=${game.name}`,
+		`Serial=${game.serial}`,
 		"",
 		"; cheats list",
 	];
 
-	for (const cheat of cheats) {
+	for (const cheat of game.cheats) {
 		const words = cheat.code.words;
 		const data: string[] = [];
 		for (let i = 0; i < words.length; i += 2) {

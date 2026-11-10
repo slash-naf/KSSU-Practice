@@ -1,4 +1,4 @@
-local ar = dofile("tools/lua/ActionReplay.lua")
+local ar = dofile("tools/desmume/ActionReplay.lua")
 
 -- TypeScript でビルド・コード生成を行う
 local build_command = "node --experimental-strip-types build.ts"

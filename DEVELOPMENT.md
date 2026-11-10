@@ -73,7 +73,7 @@ Action Replayコードの即時実行には、Luaスクリプト機能を備え�
 ## C言語のコードをAction Replayコードに変換する仕組み
 
 ビルドとAction Replayコードの生成は **TypeScript** (`build.ts` / `tools/scripts/`) が担当する。
-Lua (`exec.lua` / `tools/lua/ActionReplay.lua`) はTypeScriptが生成したARコードを読み込み、DeSmuME上で実行するだけにしている。
+Lua (`exec.lua` / `tools/desmume/ActionReplay.lua`) はTypeScriptが生成したARコードを読み込み、DeSmuME上で実行するだけにしている。
 
 ### コンパイルとリンク
 
@@ -125,8 +125,8 @@ KSSU-Practice/
 ├── tools/               # 開発用の内部ファイル
 │   ├── scripts/         # ビルド＆ARコード生成エンジン (TypeScript)
 │   │   ├── ar.ts        # モジュール配置・フック・ARコード生成
-│   │   └── formats/     # 出力フォーマット (.dct / usrcheat.dat)
-│   └── lua/             # Lua 実行用モジュール・API定義
+│   │   └── formats/     # ゲーム情報と出力フォーマット (.dct / usrcheat.dat)
+│   └── desmume/         # DeSmuME 用の Lua モジュール・API定義
 │       ├── ActionReplay.lua  # 生成済みARコードの読み込みと実行
 │       └── desmume_api.lua   # Lua Language Server 用のAPI定義
 ├── dist/                # 生成物 (Git管理外)
@@ -153,7 +153,7 @@ DeSmuME上で実行するメインLuaスクリプト。
 TypeScriptのビルドを実行し、生成されたARコードを読み込んで毎フレーム適用する。
 
 ```lua
-local ar = dofile("tools/lua/ActionReplay.lua")
+local ar = dofile("tools/desmume/ActionReplay.lua")
 
 -- TypeScript でビルド・コード生成を行う
 local build_command = "node --experimental-strip-types build.ts"
@@ -181,28 +181,30 @@ end)
 ビルド設定とチートの一覧を記述するメインスクリプト。
 メモリ配置、モジュールの読み込み、フックの設定、各チートの生成、`.dct` / `usrcheat.dat` の出力をここで行う。
 
+ゲームごとのメタ情報（ゲームID、CRC、ゲーム名、シリアル、`.dct` ファイル名）とチート一覧は `Game` クラスで定義し、`games` 配列に追加する。
+`games` に複数のゲームを追加すると、ゲームごとに `.dct` が出力され、すべてのゲームが `usrcheat.dat` に含まれる。
+
+```ts
+import { Game } from "./tools/scripts/formats/game.ts";
+
+/** usrcheat.dat のデータベース名 */
+const databaseName = "KSSU-Practice v3.3";
+
+const games = [
+	new Game({
+		id: "YKWJ",                          // ゲームID
+		crc: 0x776dde8f,                     // ゲームコードのCRC32
+		name: "KIRBY USDX J",                // ゲーム名
+		serial: "NTR-YKWJ-JPN",              // シリアル
+		dctFileName: "KIRBY_USDX_J_YKWJ01_00.dct",
+		cheats: createKirbyCheats(),         // チート一覧
+	}),
+];
+```
+
 チートは `{ name, enabled, runtime, code }` の形で管理する。
 - `enabled`: チートを初期状態で有効にするか。
 - `runtime`: DeSmuME上での即時実行 (`build/cheats.ar`) に含めるか。`false` にすると `.dct` / `usrcheat.dat` にのみ含まれる。
-
-```ts
-import { fileURLToPath } from "node:url";
-import { allocateRam, newCode } from "./tools/scripts/ar.ts";
-
-const rootDir = fileURLToPath(new URL(".", import.meta.url));
-
-// メモリ管理マネージャの作成 (コード開始, BSS開始, メモリ終端)
-const ram = allocateRam(rootDir, 0x022C0000, 0x022C2000, 0x02368000);
-
-// QSQL モジュール
-const qsqlMod = ram
-	.createModule("QSQL.c")
-	.hook("QS", 0x02001830, 0xe8bd8010) // ボタン入力処理の復帰直前にフック
-	.hook("QL", 0x02074ed8, 0xe92d4008); // ロード進行状況の直前にフック
-const qsql = newCode().importModule(qsqlMod);
-
-cheats.push({ name: "QSQL", enabled: true, runtime: true, code: qsql });
-```
 
 #### `tools/scripts/ar.ts`
 TypeScript版のビルド＆ARコード生成エンジン。
@@ -211,16 +213,17 @@ TypeScript版のビルド＆ARコード生成エンジン。
 - **ARコード生成**: バイナリデータをAction Replayの形式 (Eコードなど) に変換。
 
 #### `tools/scripts/formats/`
-出力フォーマットの実装。
-- `dct.ts`: DeSmuME用チートファイル (`.dct`) の書き出し。
-- `usrcheat.ts`: R4用チートデータベース (`usrcheat.dat`) の書き出し。
+ゲーム情報と出力フォーマットの実装。
+- `game.ts`: ゲームのメタ情報（ID、CRC、ゲーム名、シリアル、`.dct` ファイル名）とチート一覧を保持する `Game` クラス。
+- `dct.ts`: `writeDct(game)` で1ゲーム分の DeSmuME用チートファイル (`.dct`) を生成。
+- `usrcheat.ts`: `writeUsrCheat(databaseName, games)` で複数ゲームを含むR4用チートデータベース (`usrcheat.dat`) を生成。
 
-#### `tools/lua/ActionReplay.lua`
+#### `tools/desmume/ActionReplay.lua`
 生成済みARコードの読み込みと実行のみを行うモジュール。
 - **ARコードの読み込み**: `build/cheats.ar` を解析してチートごとのコード列にする。
 - **エミュレータへの注入**: 読み込んだコードを DeSmuME のメモリに直接書き込み、効果を発揮させる。
 
-#### `tools/lua/desmume_api.lua`
+#### `tools/desmume/desmume_api.lua`
 Lua Language Server 向けのDeSmuME Lua API定義。編集ツールの補完用であり、実行時には使用しない。
 
 #### `linker.ld`
@@ -356,10 +359,10 @@ DeSmuME を起動し、ゲームを読み込む。
 
 ビルドすると、実機・フラッシュカード向けのファイルが `dist/` に出力される。
 
-- `dist/KIRBY_USDX_J_YKWJ01_00.dct`: DeSmuME用のチートファイル。
-- `dist/usrcheat.dat`: R4等のフラッシュカード用チートデータベース。実機ではこれをSDカードに配置して使用する。
+- `dist/KIRBY_USDX_J_YKWJ01_00.dct`: DeSmuME用のチートファイル（`games` の各ゲームごとに1ファイル）。
+- `dist/usrcheat.dat`: R4等のフラッシュカード用チートデータベース。`games` の全ゲームが含まれる。実機ではこれをSDカードに配置して使用する。
 
-出力内容は `build.ts` のチート一覧で管理されている。Luaの実行ログにはコード全文は出力されず、`build/cheats.ar` を介して実行される。
+ゲーム名・シリアル・CRCなどのメタ情報とデータベース名は `build.ts` で指定する。Luaの実行ログにはコード全文は出力されず、`build/cheats.ar` を介して実行される。
 
 ## Action Replayコードの仕組み
 
