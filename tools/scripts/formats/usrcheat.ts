@@ -1,5 +1,4 @@
-import type { GeneratedCheat } from "./cheat.ts";
-import type { Game } from "./game.ts";
+import type { Cheat, Game } from "./cheat.ts";
 
 const HEADER_SIZE = 0x100;
 const GAME_POINTER_SIZE = 0x10;
@@ -16,7 +15,7 @@ function writeString(value: string): Buffer {
 	return padTo4(Buffer.concat([Buffer.from(value, "utf8"), Buffer.from([0])]));
 }
 
-function writeCheat(cheat: GeneratedCheat): Buffer[] {
+function writeCheat(cheat: Cheat): Buffer[] {
 	const nameAndComment = padTo4(
 		Buffer.concat([
 			Buffer.from(cheat.name, "utf8"),
@@ -44,7 +43,7 @@ function writeCheat(cheat: GeneratedCheat): Buffer[] {
 }
 
 /** 1ゲーム分のチートデータブロックを生成する */
-function writeGame(game: Game<GeneratedCheat>): Buffer {
+function writeGame(game: Game): Buffer {
 	const gameHeader = Buffer.alloc(4);
 	gameHeader.writeUInt16LE(game.cheats.length, 0);
 	gameHeader.writeUInt16LE(GAME_ENABLED_FLAG, 2);
@@ -66,7 +65,7 @@ function writeGame(game: Game<GeneratedCheat>): Buffer {
 /** 複数ゲームを含む R4 形式の usrcheat.dat を生成する */
 export function writeUsrCheat(
 	databaseName: string,
-	games: readonly Game<GeneratedCheat>[],
+	games: readonly Game[],
 ): Buffer {
 	const header = Buffer.alloc(HEADER_SIZE);
 	header.write("R4 CheatCode", 0, "ascii");

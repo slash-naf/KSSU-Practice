@@ -152,31 +152,7 @@ C言語のプログラム (`.c`) およびヘッダ (`.h`) をこの中に保存
 #### `exec.lua`
 DeSmuME上で実行するメインLuaスクリプト。
 TypeScriptのビルドを実行し、生成されたARコードを読み込んで毎フレーム適用する。
-
-```lua
-local ar = dofile("tools/desmume/ActionReplay.lua")
-
--- TypeScript でビルド・コード生成を行う
-local build_command = "node --experimental-strip-types build.ts"
-print(build_command)
-
-local status = os.execute(build_command)
-if status ~= 0 and status ~= true then
-	error("Build failed (exit code: " .. tostring(status) .. ")")
-end
-
--- 生成された Action Replay コードを読み込む
-local cheats = ar.load("build/cheats.ar")
-for _, cheat in ipairs(cheats) do
-	print(string.format("Loaded %s (%d words)", cheat.name, #cheat.codes))
-end
-
-gui.register(function()
-	for _, cheat in ipairs(cheats) do
-		ar.exec(cheat)
-	end
-end)
-```
+どのチートをDeSmuME上で実行するかは `runtime_cheat_names` に記述する。
 
 #### `build.ts`
 ビルド設定とチートの一覧を記述するメインスクリプト。
@@ -187,15 +163,14 @@ end)
 `games` に複数のゲームを追加すると、ゲームごとに `.dct` が出力され、すべてのゲームが `usrcheat.dat` に含まれる。
 
 ```ts
-import type { Cheat } from "./tools/scripts/formats/cheat.ts";
-import { Game } from "./tools/scripts/formats/game.ts";
+import { Game } from "./tools/scripts/formats/cheat.ts";
 import { writeOutputs } from "./tools/scripts/output.ts";
 
 /** usrcheat.dat のデータベース名 */
 const databaseName = "KSSU-Practice v3.3";
 
-const games: Game<Cheat>[] = [
-	new Game<Cheat>({
+const games: Game[] = [
+	new Game({
 		id: "YKWJ",                          // ゲームID
 		crc: 0x776dde8f,                     // ゲームコードのCRC32
 		name: "KIRBY USDX J",                // ゲーム名
@@ -208,9 +183,9 @@ const games: Game<Cheat>[] = [
 writeOutputs({ rootDir, databaseName, games });
 ```
 
-チートは `{ name, enabled, runtime, code }` の形で管理する。
+チートは `{ name, enabled, code }` の形で管理する。
 - `enabled`: チートを初期状態で有効にするか。
-- `runtime`: DeSmuME上での即時実行 (`build/cheats.ar`) に含めるか。`false` にすると `.dct` / `usrcheat.dat` にのみ含まれる。
+- DeSmuME上で実行するチートは `exec.lua` の `runtime_cheat_names` で指定する。
 
 #### `tools/scripts/ar.ts`
 TypeScript版のビルド＆ARコード生成エンジン。
@@ -222,12 +197,11 @@ TypeScript版のビルド＆ARコード生成エンジン。
 `writeOutputs({ rootDir, databaseName, games })` で以下をまとめて出力する。
 - ゲームごとの `.dct`
 - 全ゲームを含む `usrcheat.dat`
-- Lua実行用の `build/cheats.ar`（`runtime: true` のチートのみ）
+- Lua実行用の `build/cheats.ar`（全チート。実行するものは `exec.lua` で選択）
 
 #### `tools/scripts/formats/`
 チート・ゲーム情報と出力フォーマットの実装。
-- `cheat.ts`: 出力用の最小情報 `GeneratedCheat` と、ビルド時の `Cheat` インターフェース。
-- `game.ts`: ゲームのメタ情報（ID、CRC、ゲーム名、シリアル、`.dct` ファイル名）とチート一覧を保持する `Game` クラス。
+- `cheat.ts`: チートの `Cheat` インターフェースと、ゲームのメタ情報（ID、CRC、ゲーム名、シリアル、`.dct` ファイル名）・チート一覧を保持する `Game` クラス。
 - `dct.ts`: `writeDct(game)` で1ゲーム分の DeSmuME用チートファイル (`.dct`) を生成。
 - `usrcheat.ts`: `writeUsrCheat(databaseName, games)` で複数ゲームを含むR4用チートデータベース (`usrcheat.dat`) を生成。
 
@@ -433,7 +407,7 @@ DeSmuME を起動し、ゲームを読み込む。
 3. 自動的にビルドが実行される。
    - `exec.lua` が `node --experimental-strip-types build.ts` を呼び出す。`node` にPATHが通っていること、カレントディレクトリがプロジェクトのルートであることを確認する。
    - ビルドログが表示される。エラーがあればここに表示されるため確認する。
-4. ビルドが成功すると、`build/cheats.ar` が読み込まれ、即座にゲーム内にコードが適用される。
+4. ビルドが成功すると、`build/cheats.ar` が読み込まれ、`exec.lua` の `runtime_cheat_names` に指定したチートが即座にゲーム内に適用される。
    - 生成されたコードがエミュレータ上のメモリへ即座に注入されるため、外部チート機能に手動登録する必要はない。
    - ソースコードや `build.ts` を修正したら、Luaウィンドウの `Restart` ボタンを押すだけで再ビルド・再適用される。その後チートが実行されていない状態をQLすればメモリが新しい処理に書き換わる。
 

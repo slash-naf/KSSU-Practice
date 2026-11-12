@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { Cheat } from "./formats/cheat.ts";
+import type { Game } from "./formats/cheat.ts";
 import { writeDct } from "./formats/dct.ts";
-import type { Game } from "./formats/game.ts";
 import { writeUsrCheat } from "./formats/usrcheat.ts";
 
 export interface OutputOptions {
@@ -12,7 +11,7 @@ export interface OutputOptions {
 	/** usrcheat.dat のデータベース名 */
 	databaseName: string;
 	/** 出力するゲーム一覧 */
-	games: readonly Game<Cheat>[];
+	games: readonly Game[];
 }
 
 /** チート一式を dist / build に出力する */
@@ -33,13 +32,11 @@ export function writeOutputs(options: OutputOptions): void {
 	const usrCheatPath = path.join(distDir, "usrcheat.dat");
 	fs.writeFileSync(usrCheatPath, writeUsrCheat(databaseName, games));
 
-	const runtimePath = path.join(buildDir, "cheats.ar");
-	const runtimeCheats = games
-		.flatMap((game) => game.cheats)
-		.filter((cheat) => cheat.runtime);
+	const arPath = path.join(buildDir, "cheats.ar");
+	const arCheats = games.flatMap((game) => game.cheats);
 	fs.writeFileSync(
-		runtimePath,
-		runtimeCheats.map((cheat) => cheat.code.toString(cheat.name)).join(""),
+		arPath,
+		arCheats.map((cheat) => cheat.code.toString(cheat.name)).join(""),
 	);
 
 	for (const game of games) {
@@ -49,5 +46,5 @@ export function writeOutputs(options: OutputOptions): void {
 		}
 	}
 	console.log(`Generated ${path.relative(rootDir, usrCheatPath)}`);
-	console.log(`Generated ${path.relative(rootDir, runtimePath)}`);
+	console.log(`Generated ${path.relative(rootDir, arPath)}`);
 }

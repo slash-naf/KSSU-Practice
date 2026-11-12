@@ -1,11 +1,10 @@
-import type { GeneratedCheat } from "./cheat.ts";
-import type { Game } from "./game.ts";
+import type { Game } from "./cheat.ts";
 
 const hex8 = (value: number): string =>
 	(value >>> 0).toString(16).toUpperCase().padStart(8, "0");
 
 /** 1ゲーム分の DeSmuME 用チートファイル (.dct) を生成する */
-export function writeDct(game: Game<GeneratedCheat>): string {
+export function writeDct(game: Game): string {
 	const lines = [
 		"; DeSmuME cheats file. VERSION 2.000",
 		`Name=${game.name}`,

@@ -1,8 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { CodeBuilder, insn, RamAllocator } from "./tools/scripts/ar.ts";
-import type { Cheat } from "./tools/scripts/formats/cheat.ts";
-import { Game } from "./tools/scripts/formats/game.ts";
+import { Game, type Cheat } from "./tools/scripts/formats/cheat.ts";
 import { writeOutputs } from "./tools/scripts/output.ts";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -192,10 +191,9 @@ function createKirbyCheats(): Cheat[] {
 		["Lobster Jumps or Glides", 0x021a41dc],
 	] as const;
 
-	const randiCheats = randiCallSites.map(([name, at]) => ({
+	const randiCheats: Cheat[] = randiCallSites.map(([name, at]) => ({
 		name,
 		enabled: false,
-		runtime: true,
 		code: new CodeBuilder((code) => {
 			code.retargetCallAt({
 				at,
@@ -206,11 +204,11 @@ function createKirbyCheats(): Cheat[] {
 	}));
 
 	return [
-		{ name: "Mute", enabled: false, runtime: false, code: mute },
-		{ name: "QSQL", enabled: true, runtime: true, code: qsql },
-		{ name: "Monitor RNG", enabled: false, runtime: true, code: monitorRng },
-		{ name: "Log Dump", enabled: false, runtime: true, code: logDump },
-		{ name: "Ghost", enabled: false, runtime: true, code: ghost },
+		{ name: "Mute", enabled: false, code: mute },
+		{ name: "QSQL", enabled: true, code: qsql },
+		{ name: "Monitor RNG", enabled: false, code: monitorRng },
+		{ name: "Log Dump", enabled: false, code: logDump },
+		{ name: "Ghost", enabled: false, code: ghost },
 		...randiCheats,
 	];
 }
@@ -220,8 +218,8 @@ function createKirbyCheats(): Cheat[] {
 /** usrcheat.dat のデータベース名 */
 const databaseName = "KSSU-Practice v3.3";
 
-const games: Game<Cheat>[] = [
-	new Game<Cheat>({
+const games: Game[] = [
+	new Game({
 		id: "YKWJ",
 		crc: 0x776dde8f,
 		name: "KIRBY USDX J",
