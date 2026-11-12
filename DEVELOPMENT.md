@@ -111,7 +111,7 @@ XXXXXXXX: E92D5FFF  ; stmdb r13!,{r0-r12,r14}; レジスタの退避(状態を�
 
 ```text
 KSSU-Practice/
-├── build.ts             # ビルド設定・チート一覧・出力処理
+├── build.ts             # ビルド設定・チート一覧
 ├── exec.lua             # ユーザ用：ビルド実行＆実行設定スクリプト
 ├── makefile             # コンパイル設定ファイル
 ├── linker.ld            # メモリ配置設定ファイル
@@ -125,7 +125,8 @@ KSSU-Practice/
 ├── tools/               # 開発用の内部ファイル
 │   ├── scripts/         # ビルド＆ARコード生成エンジン (TypeScript)
 │   │   ├── ar.ts        # モジュール配置・フック・ARコード生成
-│   │   └── formats/     # ゲーム情報と出力フォーマット (.dct / usrcheat.dat)
+│   │   ├── output.ts    # dist / build への出力
+│   │   └── formats/     # チート・ゲーム情報と出力フォーマット
 │   └── desmume/         # DeSmuME 用の Lua モジュール・API定義
 │       ├── ActionReplay.lua  # 生成済みARコードの読み込みと実行
 │       └── desmume_api.lua   # Lua Language Server 用のAPI定義
@@ -179,19 +180,22 @@ end)
 
 #### `build.ts`
 ビルド設定とチートの一覧を記述するメインスクリプト。
-メモリ配置、モジュールの読み込み、フックの設定、各チートの生成、`.dct` / `usrcheat.dat` の出力をここで行う。
+メモリ配置、モジュールの読み込み、フックの設定、各チートの生成を行う。
+`.dct` / `usrcheat.dat` / `build/cheats.ar` の出力は `writeOutputs` に任せる。
 
 ゲームごとのメタ情報（ゲームID、CRC、ゲーム名、シリアル、`.dct` ファイル名）とチート一覧は `Game` クラスで定義し、`games` 配列に追加する。
 `games` に複数のゲームを追加すると、ゲームごとに `.dct` が出力され、すべてのゲームが `usrcheat.dat` に含まれる。
 
 ```ts
+import type { Cheat } from "./tools/scripts/formats/cheat.ts";
 import { Game } from "./tools/scripts/formats/game.ts";
+import { writeOutputs } from "./tools/scripts/output.ts";
 
 /** usrcheat.dat のデータベース名 */
 const databaseName = "KSSU-Practice v3.3";
 
-const games = [
-	new Game({
+const games: Game<Cheat>[] = [
+	new Game<Cheat>({
 		id: "YKWJ",                          // ゲームID
 		crc: 0x776dde8f,                     // ゲームコードのCRC32
 		name: "KIRBY USDX J",                // ゲーム名
@@ -200,6 +204,8 @@ const games = [
 		cheats: createKirbyCheats(),         // チート一覧
 	}),
 ];
+
+writeOutputs({ rootDir, databaseName, games });
 ```
 
 チートは `{ name, enabled, runtime, code }` の形で管理する。
@@ -212,8 +218,15 @@ TypeScript版のビルド＆ARコード生成エンジン。
 - **バイナリの抽出**: 生成された `.bin` ファイルとシンボル情報を読み込む。
 - **ARコード生成**: バイナリデータをAction Replayの形式 (Eコードなど) に変換。
 
+#### `tools/scripts/output.ts`
+`writeOutputs({ rootDir, databaseName, games })` で以下をまとめて出力する。
+- ゲームごとの `.dct`
+- 全ゲームを含む `usrcheat.dat`
+- Lua実行用の `build/cheats.ar`（`runtime: true` のチートのみ）
+
 #### `tools/scripts/formats/`
-ゲーム情報と出力フォーマットの実装。
+チート・ゲーム情報と出力フォーマットの実装。
+- `cheat.ts`: 出力用の最小情報 `GeneratedCheat` と、ビルド時の `Cheat` インターフェース。
 - `game.ts`: ゲームのメタ情報（ID、CRC、ゲーム名、シリアル、`.dct` ファイル名）とチート一覧を保持する `Game` クラス。
 - `dct.ts`: `writeDct(game)` で1ゲーム分の DeSmuME用チートファイル (`.dct`) を生成。
 - `usrcheat.ts`: `writeUsrCheat(databaseName, games)` で複数ゲームを含むR4用チートデータベース (`usrcheat.dat`) を生成。
@@ -297,33 +310,104 @@ void RunMyCode(int32_t* r) {
 
 `build.ts` を開き、作成したファイルを読み込んでフックする設定を記述する。
 
-[`tools/scripts/ar.ts`](tools/scripts/ar.ts) は用途に応じた複数のフック・パッチメソッドを提供する：
+#### モジュールの読み込みとフック
 
-#### `hook(funcName, hookAddr, originalCode, [retInfo])`
-指定アドレスの命令を自作関数呼び出しへ割り込ませる。トランポリンコードがレジスタの退避と復帰を自動で行う。
-- `funcName`: 呼び出す C 関数のシンボル名
-- `hookAddr`: フックを挿入するゲーム側のアドレス
-- `originalCode`: フックによって上書きされる元の命令（32bit Hex）。自作コード終了後に実行される。
-- `retInfo`（省略可）: フック後の戻り先。アドレスを指定した場合はそこへジャンプし、命令を指定した場合はその命令を実行して復帰する。
+`RamAllocator` がコード領域と BSS 領域を管理する。`createModule` で C ソースをコンパイルし、第2引数にフック定義を渡す。
 
 ```ts
-const myMod = ram
-	.createModule("MyCode.c")
-	.hook("RunMyCode", 0x02001830, 0xe8bd8010);
-const myCode = newCode().importModule(myMod);
+const ram = new RamAllocator(rootDir, 0x022c0000, 0x022c2000, 0x02368000);
+
+const myMod = ram.createModule("MyCode.c", [
+	{
+		symbol: "RunMyCode",                       // 呼び出す C 関数のシンボル名
+		at: 0x02001830,                            // フックを挿入するアドレス
+		expected: insn(0xe8bd8010, "ldmia sp!, {r4, pc}"), // 上書きされる元の命令
+		returnWith: insn(0xe8bd8010, "ldmia sp!, {r4, pc}"), // フック後の命令
+	},
+]);
 ```
 
-#### `override(targetFunc, originalAddr, originalCode, [retInfo])`
-ゲーム側の処理を丸ごと自作関数で置き換える。
+- `expected`: フック対象の命令。実際の命令と一致したときだけフックが適用される（バージョン違いの事故防止）。
+- `returnWith` / `resumeAt`: フック後の動作。`returnWith` は命令を実行して元の処理へ戻り、`resumeAt` は指定アドレスへジャンプする。どちらも省略すると、元の命令を実行して `at + 4` から再開する。
 
-#### `replaceCall(originalAddr, oldTarget, newTarget)`
-既存のサブルーチン呼び出し命令（`bl`）の呼び出し先アドレスのみを自作関数へ差し替える。
+トランポリンコード（レジスタ退避 → C 関数呼び出し → 復帰）は自動生成される。
 
-#### `redirect(targetFunc, originalAddr, originalCode)`
-条件分岐やジャンプ処理を自作関数へ直接バイパスする。
+#### `CodeBuilder` と `include`
 
-#### `disable(originalAddr, originalCode)`
-関数の先頭に `bx lr` (`0xE12FFF1E`) を書き込み、処理を即座に無効化（早期リターン）する。
+フックだけでは完結しない処理（フックの適用やポインタ設定など）は `CodeBuilder` にまとめる。`include(mod)` はモジュール本体とフックを AR コードへ展開する。
+
+```ts
+const myCode = new CodeBuilder((code) => {
+	code.include(myMod);                // 必ず最初に呼ぶ
+
+	code.write32(0x022c1000, 0x12345678);
+	code.write16(0x0205b3c0, 9999);
+	code.write8(0x0205e76c, 0);
+});
+```
+
+`include` は他のコードを追加する前、かつ条件を開く前に呼ぶ必要がある。
+
+#### 条件コード
+
+AR の条件分岐は `if*` メソッドで積み重ね、`endAllIf()` でまとめて閉じる。条件は AND で評価される。
+
+```ts
+code
+	.ifEq32(0x0206b6a0, 0xa2400c21)
+	.write32(0x0206b6a4, 0xe1a00000)
+	.endAllIf();
+
+code
+	.ifEq8(0x0205b244, 0x000b)              // 8bit
+	.ifAllBits16(0x02041e68, 0x0004)        // 16bit の全ビット
+	.write32(0x022c2000, 0x022c2e30)
+	.endAllIf();
+```
+
+- `ifLt8` / `ifGt8` / `ifEq8` / `ifNe8`: 8bit 比較。奇数アドレスもそのバイトだけを比較する。
+- `ifLt16` / `ifGt16` / `ifEq16` / `ifNe16`: 16bit 比較（2バイト境界）。
+- `ifLt32` / `ifGt32` / `ifEq32` / `ifNe32`: 32bit 比較（4バイト境界）。
+- `ifAnyBit8` / `ifAnyBit16`: マスクしたビットのいずれかが立っている。
+- `ifAllBits8` / `ifAllBits16`: マスクしたビットがすべて立っている。
+- `ifEq16Masked`: 任意マスクの 16bit 比較。通常は上記のビット判定を使う。
+
+`if*` を呼んだら、必ず `endAllIf()` で閉じること。閉じ忘れは `toString()` がエラーにする。
+
+#### 関数の差し替え
+
+モジュールのシンボルは `mod.sym("name")` で取得する（存在しなければ例外）。
+
+| メソッド | 用途 |
+| --- | --- |
+| `replaceFunction(targetFunc, { at, expected, resumeAt? })` | ゲーム側の処理を自作関数で置き換え、`resumeAt` から再開する |
+| `jumpToAt(targetFunc, { at, expected })` | 指定アドレスの命令を自作関数への `b` に置き換える |
+| `earlyReturnAt({ at, expected })` | 指定アドレスに `bx lr` を書き込み、処理を即座に return させる |
+| `retargetCallAt({ at, from, to })` | 既存の `bl` 命令の呼び出し先だけを差し替える |
+
+```ts
+code.replaceFunction(myMod.sym("ArenaImageSwitcher"), {
+	at: 0x0206ce20,
+	expected: insn(0xe3500007, "cmp r0, #7"),
+	resumeAt: 0x0206cf68,
+});
+
+code.jumpToAt(myMod.sym("DrawNumbers"), {
+	at: 0x02090d48,
+	expected: insn(0xe92d41f0, "stmdb sp!, {r4-r8, lr}"),
+});
+
+code.earlyReturnAt({
+	at: 0x020904c8,
+	expected: insn(0xe92d4ff8, "stmdb sp!, {r3-r11, lr}"),
+});
+
+code.retargetCallAt({
+	at: 0x020c42a0,
+	from: 0x0200b8a4,
+	to: myMod.sym("RandiWithUpdate"),
+});
+```
 
 ### ビルドと実行 (Build & Run)
 

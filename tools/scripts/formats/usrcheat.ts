@@ -1,4 +1,5 @@
-import type { Game, GeneratedCheat } from "./game.ts";
+import type { GeneratedCheat } from "./cheat.ts";
+import type { Game } from "./game.ts";
 
 const HEADER_SIZE = 0x100;
 const GAME_POINTER_SIZE = 0x10;

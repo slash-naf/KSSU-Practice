@@ -1,10 +1,4 @@
-export interface GeneratedCheat {
-	name: string;
-	enabled: boolean;
-	code: {
-		readonly words: readonly number[];
-	};
-}
+import type { GeneratedCheat } from "./cheat.ts";
 
 export interface GameOptions<TCheat extends GeneratedCheat = GeneratedCheat> {
 	/** ゲームID (4文字) */

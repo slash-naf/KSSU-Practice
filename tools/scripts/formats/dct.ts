@@ -1,4 +1,5 @@
-import type { Game, GeneratedCheat } from "./game.ts";
+import type { GeneratedCheat } from "./cheat.ts";
+import type { Game } from "./game.ts";
 
 const hex8 = (value: number): string =>
 	(value >>> 0).toString(16).toUpperCase().padStart(8, "0");
