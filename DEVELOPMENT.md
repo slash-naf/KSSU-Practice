@@ -312,19 +312,27 @@ void RunMyCode(int32_t* r) {
 
 #### モジュールの読み込みとフック
 
-`RamAllocator` がコード領域と BSS 領域を管理する。`createModule` で C ソースをコンパイルし、第2引数にフック定義を渡す。
+`RamAllocator` がコード領域と BSS 領域を管理する。`createModule` で C ソースをコンパイルし、`CodeBuilder` の第2引数に渡すと、モジュール本体とフックが自動的にコードの先頭へ追加される。
 
 ```ts
 const ram = new RamAllocator(rootDir, 0x022c0000, 0x022c2000, 0x02368000);
 
-const myMod = ram.createModule("MyCode.c", [
-	{
-		symbol: "RunMyCode",                       // 呼び出す C 関数のシンボル名
-		at: 0x02001830,                            // フックを挿入するアドレス
-		expected: insn(0xe8bd8010, "ldmia sp!, {r4, pc}"), // 上書きされる元の命令
-		returnWith: insn(0xe8bd8010, "ldmia sp!, {r4, pc}"), // フック後の命令
+const myCheat = new CodeBuilder(
+	(code) => {
+		// フックだけでは完結しない処理はここに書く
+		code.write32(0x022c1000, 0x12345678);
+		code.write16(0x0205b3c0, 9999);
+		code.write8(0x0205e76c, 0);
 	},
-]);
+	ram.createModule("MyCode.c", [
+		{
+			symbol: "RunMyCode",                       // 呼び出す C 関数のシンボル名
+			at: 0x02001830,                            // フックを挿入するアドレス
+			expected: insn(0xe8bd8010, "ldmia sp!, {r4, pc}"), // 上書きされる元の命令
+			returnWith: insn(0xe8bd8010, "ldmia sp!, {r4, pc}"), // フック後の命令
+		},
+	]),
+);
 ```
 
 - `expected`: フック対象の命令。実際の命令と一致したときだけフックが適用される（バージョン違いの事故防止）。
@@ -332,21 +340,11 @@ const myMod = ram.createModule("MyCode.c", [
 
 トランポリンコード（レジスタ退避 → C 関数呼び出し → 復帰）は自動生成される。
 
-#### `CodeBuilder` と `include`
-
-フックだけでは完結しない処理（フックの適用やポインタ設定など）は `CodeBuilder` にまとめる。`include(mod)` はモジュール本体とフックを AR コードへ展開する。
+モジュールのシンボルはビルダーの `sym()` で取得する（存在しなければ例外）。`code.sym(...)` は自分のモジュール、`otherCheat.sym(...)` は別のチートのモジュールを参照する。
 
 ```ts
-const myCode = new CodeBuilder((code) => {
-	code.include(myMod);                // 必ず最初に呼ぶ
-
-	code.write32(0x022c1000, 0x12345678);
-	code.write16(0x0205b3c0, 9999);
-	code.write8(0x0205e76c, 0);
-});
+code.write32(otherCheat.sym("p_show"), code.sym("show"));
 ```
-
-`include` は他のコードを追加する前、かつ条件を開く前に呼ぶ必要がある。
 
 #### 条件コード
 
@@ -376,7 +374,7 @@ code
 
 #### 関数の差し替え
 
-モジュールのシンボルは `mod.sym("name")` で取得する（存在しなければ例外）。
+フックではなく、ゲーム側の関数そのものを自作関数へ置き換える場合は以下のメソッドを使う。
 
 | メソッド | 用途 |
 | --- | --- |
@@ -386,13 +384,13 @@ code
 | `retargetCallAt({ at, from, to })` | 既存の `bl` 命令の呼び出し先だけを差し替える |
 
 ```ts
-code.replaceFunction(myMod.sym("ArenaImageSwitcher"), {
+code.replaceFunction(code.sym("ArenaImageSwitcher"), {
 	at: 0x0206ce20,
 	expected: insn(0xe3500007, "cmp r0, #7"),
 	resumeAt: 0x0206cf68,
 });
 
-code.jumpToAt(myMod.sym("DrawNumbers"), {
+code.jumpToAt(code.sym("DrawNumbers"), {
 	at: 0x02090d48,
 	expected: insn(0xe92d41f0, "stmdb sp!, {r4-r8, lr}"),
 });
@@ -405,7 +403,7 @@ code.earlyReturnAt({
 code.retargetCallAt({
 	at: 0x020c42a0,
 	from: 0x0200b8a4,
-	to: myMod.sym("RandiWithUpdate"),
+	to: code.sym("RandiWithUpdate"),
 });
 ```
 

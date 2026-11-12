@@ -2,12 +2,39 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
-/** 32bit unsigned に丸める */
-const u32 = (n: number): number => n >>> 0;
+const U8_MAX = 0xFF;
+const U16_MAX = 0xFFFF;
+const U32_MAX = 0xFFFFFFFF;
 
+// ARM 命令
 const ARM_PUSH = 0xE92D5FFF; // stmdb r13!,{r0-r12,r14}
 const ARM_POP = 0xE8BD5FFF; // ldmia r13!,{r0-r12,r14}
 const ARM_RET = 0xE12FFF1E; // bx r14
+const ARM_B = 0xEA000000;
+const ARM_BL = 0xEB000000;
+const BRANCH_OFFSET_MASK = 0x00FFFFFF;
+const BRANCH_PC_BIAS = 2;
+
+// Action Replay コードのプレフィックス
+const AR_WRITE16 = 0x10000000;
+const AR_WRITE8 = 0x20000000;
+const AR_COND16 = 0x40000000;
+const AR_END_IF = 0xD2000000;
+const AR_PATCH = 0xE0000000;
+const CONDITION_UNIT = 0x10000000;
+
+// 条件コードの種類
+const CMP_LT = 3;
+const CMP_GT = 4;
+const CMP_EQ = 5;
+const CMP_NE = 6;
+
+/** 32bit unsigned に丸める */
+const u32 = (n: number): number => n >>> 0;
+
+/** 16進数表記にする */
+const hex = (value: number, width = 8): string =>
+	value.toString(16).toUpperCase().padStart(width, "0");
 
 /** 命令コード。text はリスティング用の表示名。 */
 export type Instruction =
@@ -25,7 +52,7 @@ export function instructionCode(instruction: Instruction): number {
 }
 
 function assertU32(value: number, label: string): number {
-	if (!Number.isInteger(value) || value < 0 || value > 0xFFFFFFFF) {
+	if (!Number.isInteger(value) || value < 0 || value > U32_MAX) {
 		throw new Error(
 			`${label} must be a 32bit unsigned integer: ${String(value)}`,
 		);
@@ -36,10 +63,7 @@ function assertU32(value: number, label: string): number {
 function assertRange(value: number, max: number, label: string): number {
 	if (!Number.isInteger(value) || value < 0 || value > max) {
 		throw new Error(
-			`${label} must be in 0x00000000..0x${max
-				.toString(16)
-				.toUpperCase()
-				.padStart(8, "0")}: ${String(value)}`,
+			`${label} must be in 0x00000000..0x${hex(max)}: ${String(value)}`,
 		);
 	}
 	return value;
@@ -48,26 +72,37 @@ function assertRange(value: number, max: number, label: string): number {
 function assertAligned(addr: number, alignment: number, label: string): void {
 	if (addr % alignment !== 0) {
 		throw new Error(
-			`${label} must be ${alignment}-byte aligned: 0x${addr
-				.toString(16)
-				.toUpperCase()}`,
+			`${label} must be ${alignment}-byte aligned: 0x${hex(addr)}`,
 		);
 	}
 }
 
-/** 現在地から targetAddr への b 命令 */
-function jump(currentAddr: number, targetAddr: number): number {
-	const offset = u32((targetAddr - currentAddr) >>> 2);
-	return u32(0xEA000000 + ((offset - 2) & 0x00FFFFFF));
+/** 分岐命令 (b / bl) を組み立てる */
+function branch(opcode: number, from: number, to: number): number {
+	const offset = u32((to - from) >>> 2);
+	return u32(opcode + ((offset - BRANCH_PC_BIAS) & BRANCH_OFFSET_MASK));
 }
 
-/** 現在地から targetAddr への bl 命令 */
-function call(currentAddr: number, targetAddr: number): number {
-	const offset = u32((targetAddr - currentAddr) >>> 2);
-	return u32(0xEB000000 + ((offset - 2) & 0x00FFFFFF));
+const jump = (from: number, to: number): number => branch(ARM_B, from, to);
+const call = (from: number, to: number): number => branch(ARM_BL, from, to);
+
+/** シンボルを取得する。存在しなければ例外を投げる */
+function resolveSymbol(
+	symbols: Readonly<Record<string, number>>,
+	name: string,
+	source: string,
+): number {
+	const value = symbols[name];
+	if (value === undefined) {
+		const available = Object.keys(symbols).sort().join(", ");
+		throw new Error(
+			`Symbol "${name}" not found in ${source}. Available: ${available}`,
+		);
+	}
+	return value;
 }
 
-export interface BuildLibrary {
+interface BuildLibrary {
 	bin: number[];
 	symbols: Record<string, number>;
 }
@@ -86,15 +121,14 @@ export interface HookSpec {
 	resumeAt?: number;
 }
 
+/** コンパイル済みの C モジュール */
 export interface Module {
 	path: string;
 	bin: number[];
 	symbols: Record<string, number>;
 	origin: number;
-	hooks: CodeBuilder;
-	ram: RamAllocator;
-	/** シンボルを取得する。存在しなければ例外を投げる */
-	sym(name: string): number;
+	/** モジュールをゲームへ適用するフックコード */
+	hooks: number[];
 }
 
 function moduleName(filePath: string): string {
@@ -114,8 +148,8 @@ function compile(
 	const cmd = [
 		"make",
 		`SRC=source/${filePath}`,
-		`ADDR=0x${origin.toString(16).padStart(8, "0")}`,
-		`BSS=0x${bss.toString(16).padStart(8, "0")}`,
+		`ADDR=0x${hex(origin)}`,
+		`BSS=0x${hex(bss)}`,
 	].join(" ");
 
 	console.log(cmd);
@@ -150,11 +184,30 @@ function compile(
 /** Action Replay コード生成器 */
 export class CodeBuilder {
 	readonly words: number[] = [];
-	readonly symbols: Record<string, number> = {};
+	private readonly symbols: Readonly<Record<string, number>>;
+	private readonly symbolSource: string;
 	private openIf = false;
 
-	constructor(build?: (code: CodeBuilder) => void) {
+	/**
+	 * @param build コード本体
+	 * @param mod 含めるモジュール。本体とフックが先頭に追加される
+	 */
+	constructor(build?: (code: CodeBuilder) => void, mod?: Module) {
+		this.symbols = mod?.symbols ?? {};
+		this.symbolSource = mod?.path ?? "(no module)";
+
+		if (mod) {
+			// 配置先がまだ 0 のときだけモジュール本体を書き込む
+			this.ifEq32(mod.origin, 0).patch(mod.origin, mod.bin).endAllIf();
+			this.append(mod.hooks);
+		}
+
 		build?.(this);
+	}
+
+	/** モジュールのシンボルを取得する。存在しなければ例外を投げる */
+	sym(name: string): number {
+		return resolveSymbol(this.symbols, name, this.symbolSource);
 	}
 
 	append(values: number | readonly number[]): this {
@@ -169,31 +222,28 @@ export class CodeBuilder {
 	}
 
 	write32(addr: number, value: number): this {
-		this.append([addr, value]);
-		return this;
+		return this.append([addr, value]);
 	}
 
 	write16(addr: number, value: number): this {
-		this.append([
-			u32(0x10000000 + assertU32(addr, "write16 address")),
-			assertRange(value, 0xFFFF, "write16 value"),
+		return this.append([
+			u32(AR_WRITE16 + assertU32(addr, "write16 address")),
+			assertRange(value, U16_MAX, "write16 value"),
 		]);
-		return this;
 	}
 
 	write8(addr: number, value: number): this {
-		this.append([
-			u32(0x20000000 + assertU32(addr, "write8 address")),
-			assertRange(value, 0xFF, "write8 value"),
+		return this.append([
+			u32(AR_WRITE8 + assertU32(addr, "write8 address")),
+			assertRange(value, U8_MAX, "write8 value"),
 		]);
-		return this;
 	}
 
 	/** 32bit 比較コード */
-	private cmp32(type: number, addr: number, value: number): [number, number] {
+	private cmp32(op: number, addr: number, value: number): [number, number] {
 		assertAligned(addr, 4, "32bit condition address");
 		return [
-			u32(type * 0x10000000 + assertU32(addr, "condition address")),
+			u32(op * CONDITION_UNIT + assertU32(addr, "condition address")),
 			assertU32(value, "condition value"),
 		];
 	}
@@ -203,35 +253,21 @@ export class CodeBuilder {
 	 * mask は比較するビット、value はマスク後の期待値。
 	 */
 	private cmp16(
-		type: number,
+		op: number,
 		addr: number,
 		value: number,
 		mask: number,
 	): [number, number] {
 		assertAligned(addr, 2, "16bit condition address");
-		const expected = assertRange(value, 0xFFFF, "condition value");
-		const bits = assertRange(mask, 0xFFFF, "condition mask");
-		const invertedMask = (~bits) & 0xFFFF;
-
+		const invertedMask = ~mask & U16_MAX;
 		return [
 			u32(
-				type * 0x10000000 +
+				op * CONDITION_UNIT +
 					assertU32(addr, "condition address") +
-					0x40000000,
+					AR_COND16,
 			),
-			u32(expected + ((invertedMask << 16) >>> 0)),
+			u32(value + (invertedMask << 16)),
 		];
-	}
-
-	/** 8bit 比較を、そのバイトを含む16bit halfwordのマスク比較で表現する */
-	private cmp8(
-		type: number,
-		addr: number,
-		value: number,
-		mask: number,
-	): [number, number] {
-		const shift = (addr & 1) * 8;
-		return this.cmp16(type, addr & ~1, value << shift, mask << shift);
 	}
 
 	/** 条件コードを追加し、endAllIf() まで条件ブロックを開く */
@@ -241,116 +277,101 @@ export class CodeBuilder {
 		return this;
 	}
 
-	ifLt8(addr: number, value: number): this {
-		this.condition(
-			this.cmp8(3, addr, assertRange(value, 0xFF, "ifLt8 value"), 0xFF),
+	private if8(op: number, addr: number, value: number, mask = U8_MAX): this {
+		const bits = assertRange(value, U8_MAX, "8bit condition value");
+		const maskBits = assertRange(mask, U8_MAX, "8bit condition mask");
+		const shift = (addr & 1) * 8;
+		return this.condition(
+			this.cmp16(op, addr & ~1, bits << shift, maskBits << shift),
 		);
-		return this;
+	}
+
+	private if16(op: number, addr: number, value: number, mask = U16_MAX): this {
+		return this.condition(
+			this.cmp16(
+				op,
+				addr,
+				assertRange(value, U16_MAX, "16bit condition value"),
+				assertRange(mask, U16_MAX, "16bit condition mask"),
+			),
+		);
+	}
+
+	private if32(op: number, addr: number, value: number): this {
+		return this.condition(this.cmp32(op, addr, value));
+	}
+
+	ifLt8(addr: number, value: number): this {
+		return this.if8(CMP_LT, addr, value);
 	}
 
 	ifGt8(addr: number, value: number): this {
-		this.condition(
-			this.cmp8(4, addr, assertRange(value, 0xFF, "ifGt8 value"), 0xFF),
-		);
-		return this;
+		return this.if8(CMP_GT, addr, value);
 	}
 
 	ifEq8(addr: number, value: number): this {
-		this.condition(
-			this.cmp8(5, addr, assertRange(value, 0xFF, "ifEq8 value"), 0xFF),
-		);
-		return this;
+		return this.if8(CMP_EQ, addr, value);
 	}
 
 	ifNe8(addr: number, value: number): this {
-		this.condition(
-			this.cmp8(6, addr, assertRange(value, 0xFF, "ifNe8 value"), 0xFF),
-		);
-		return this;
+		return this.if8(CMP_NE, addr, value);
 	}
 
 	ifLt16(addr: number, value: number): this {
-		this.condition(
-			this.cmp16(3, addr, assertRange(value, 0xFFFF, "ifLt16 value"), 0xFFFF),
-		);
-		return this;
+		return this.if16(CMP_LT, addr, value);
 	}
 
 	ifGt16(addr: number, value: number): this {
-		this.condition(
-			this.cmp16(4, addr, assertRange(value, 0xFFFF, "ifGt16 value"), 0xFFFF),
-		);
-		return this;
+		return this.if16(CMP_GT, addr, value);
 	}
 
 	ifEq16(addr: number, value: number): this {
-		this.condition(
-			this.cmp16(5, addr, assertRange(value, 0xFFFF, "ifEq16 value"), 0xFFFF),
-		);
-		return this;
+		return this.if16(CMP_EQ, addr, value);
 	}
 
 	ifNe16(addr: number, value: number): this {
-		this.condition(
-			this.cmp16(6, addr, assertRange(value, 0xFFFF, "ifNe16 value"), 0xFFFF),
-		);
-		return this;
+		return this.if16(CMP_NE, addr, value);
 	}
 
 	ifLt32(addr: number, value: number): this {
-		this.condition(this.cmp32(3, addr, value));
-		return this;
+		return this.if32(CMP_LT, addr, value);
 	}
 
 	ifGt32(addr: number, value: number): this {
-		this.condition(this.cmp32(4, addr, value));
-		return this;
+		return this.if32(CMP_GT, addr, value);
 	}
 
 	ifEq32(addr: number, value: number): this {
-		this.condition(this.cmp32(5, addr, value));
-		return this;
+		return this.if32(CMP_EQ, addr, value);
 	}
 
 	ifNe32(addr: number, value: number): this {
-		this.condition(this.cmp32(6, addr, value));
-		return this;
+		return this.if32(CMP_NE, addr, value);
 	}
 
 	/** (byte[addr] & mask) != 0 */
 	ifAnyBit8(addr: number, mask: number): this {
-		this.condition(
-			this.cmp8(6, addr, 0, assertRange(mask, 0xFF, "ifAnyBit8 mask")),
-		);
-		return this;
+		return this.if8(CMP_NE, addr, 0, mask);
 	}
 
 	/** (byte[addr] & mask) == mask */
 	ifAllBits8(addr: number, mask: number): this {
-		const bits = assertRange(mask, 0xFF, "ifAllBits8 mask");
-		this.condition(this.cmp8(5, addr, bits, bits));
-		return this;
+		return this.if8(CMP_EQ, addr, mask, mask);
 	}
 
 	/** (half[addr] & mask) != 0 */
 	ifAnyBit16(addr: number, mask: number): this {
-		this.condition(
-			this.cmp16(6, addr, 0, assertRange(mask, 0xFFFF, "ifAnyBit16 mask")),
-		);
-		return this;
+		return this.if16(CMP_NE, addr, 0, mask);
 	}
 
 	/** (half[addr] & mask) == mask */
 	ifAllBits16(addr: number, mask: number): this {
-		const bits = assertRange(mask, 0xFFFF, "ifAllBits16 mask");
-		this.condition(this.cmp16(5, addr, bits, bits));
-		return this;
+		return this.if16(CMP_EQ, addr, mask, mask);
 	}
 
 	/** 任意マスクの16bit比較。通常は ifAnyBit16 / ifAllBits16 を使う。 */
 	ifEq16Masked(addr: number, value: number, mask: number): this {
-		this.condition(this.cmp16(5, addr, value, mask));
-		return this;
+		return this.if16(CMP_EQ, addr, value, mask);
 	}
 
 	/** 開いている条件をすべて閉じる */
@@ -358,42 +379,19 @@ export class CodeBuilder {
 		if (!this.openIf) {
 			throw new Error("endAllIf() called without an open condition");
 		}
-		this.append([0xD2000000, 0]);
 		this.openIf = false;
-		return this;
+		return this.append([AR_END_IF, 0]);
 	}
 
 	/** E コードでバイト列（32bit ワード列）を書き込む */
 	patch(dest: number, words: readonly number[]): this {
-		const byteLength = words.length * 4;
-		const padded = words.slice();
+		const padded = [...words];
 		if (padded.length % 2 === 1) padded.push(0);
 
-		this.append([
-			u32(0xE0000000 + assertU32(dest, "patch destination")),
-			assertU32(byteLength, "patch length"),
-		]);
-		this.append(padded);
-		return this;
-	}
-
-	/** モジュール本体とフックをこのコードに含める */
-	include(mod: Module): this {
-		if (this.openIf) {
-			throw new Error("include() must be called before conditions");
-		}
-		if (this.words.length > 0) {
-			throw new Error("include() must be called before other code");
-		}
-
-		// 配置先がまだ 0 のときだけコードを書き込む
-		this.ifEq32(mod.origin, 0);
-		this.patch(mod.origin, mod.bin);
-		this.endAllIf();
-
-		this.append(mod.hooks.words);
-		Object.assign(this.symbols, mod.symbols);
-		return this;
+		return this.append([
+			u32(AR_PATCH + assertU32(dest, "patch destination")),
+			words.length * 4,
+		]).append(padded);
 	}
 
 	/** 関数を丸ごと差し替える */
@@ -410,8 +408,7 @@ export class CodeBuilder {
 			this.write32(addr, jump(addr, options.resumeAt));
 		}
 
-		this.endAllIf();
-		return this;
+		return this.endAllIf();
 	}
 
 	/** 指定アドレスの命令を自作関数へのジャンプに置き換える */
@@ -420,29 +417,25 @@ export class CodeBuilder {
 		options: { at: number; expected: Instruction },
 	): this {
 		assertAligned(options.at, 4, "jumpToAt address");
-		this.ifEq32(options.at, instructionCode(options.expected));
-		this.write32(options.at, jump(options.at, targetFunc));
-		this.endAllIf();
-		return this;
+		return this.ifEq32(options.at, instructionCode(options.expected))
+			.write32(options.at, jump(options.at, targetFunc))
+			.endAllIf();
 	}
 
 	/** 関数の先頭で即座に return させる */
 	earlyReturnAt(options: { at: number; expected: Instruction }): this {
 		assertAligned(options.at, 4, "earlyReturnAt address");
-		this.ifEq32(options.at, instructionCode(options.expected));
-		this.write32(options.at, ARM_RET);
-		this.endAllIf();
-		return this;
+		return this.ifEq32(options.at, instructionCode(options.expected))
+			.write32(options.at, ARM_RET)
+			.endAllIf();
 	}
 
 	/** 既存の bl 命令の呼び出し先だけを差し替える */
 	retargetCallAt(options: { at: number; from: number; to: number }): this {
 		assertAligned(options.at, 4, "retargetCallAt address");
-		const expected = call(options.at, options.from);
-		this.ifEq32(options.at, expected);
-		this.write32(options.at, call(options.at, options.to));
-		this.endAllIf();
-		return this;
+		return this.ifEq32(options.at, call(options.at, options.from))
+			.write32(options.at, call(options.at, options.to))
+			.endAllIf();
 	}
 
 	toString(name: string): string {
@@ -455,14 +448,7 @@ export class CodeBuilder {
 
 		const lines = [`[${name}]`];
 		for (let i = 0; i < this.words.length; i += 2) {
-			lines.push(
-				`${this.words[i].toString(16).toUpperCase().padStart(8, "0")} ${this.words[
-					i + 1
-				]
-					.toString(16)
-					.toUpperCase()
-					.padStart(8, "0")}`,
-			);
+			lines.push(`${hex(this.words[i])} ${hex(this.words[i + 1])}`);
 		}
 		return `${lines.join("\r\n")}\r\n`;
 	}
@@ -476,7 +462,12 @@ export class RamAllocator {
 	readonly endAddr: number;
 	private readonly rootDir: string;
 
-	constructor(rootDir: string, codeAddr: number, bssAddr: number, endAddr: number) {
+	constructor(
+		rootDir: string,
+		codeAddr: number,
+		bssAddr: number,
+		endAddr: number,
+	) {
 		this.rootDir = rootDir;
 		this.codeCursor = codeAddr;
 		this.bssCursor = bssAddr;
@@ -484,13 +475,13 @@ export class RamAllocator {
 		this.endAddr = endAddr;
 	}
 
-	allocateCode(size: number, context: string): void {
+	private allocate(size: number, context: string): void {
 		this.codeCursor += size;
 		if (this.codeCursor > this.bssOrigin) {
 			throw new Error(
 				`Code allocation for '${context}' overlaps BSS region.\n` +
-					`Code limit: 0x${this.codeCursor.toString(16).toUpperCase()} (size: 0x${size.toString(16).toUpperCase()})\n` +
-					`BSS start:  0x${this.bssOrigin.toString(16).toUpperCase()}`,
+					`Code limit: 0x${hex(this.codeCursor)} (size: 0x${hex(size)})\n` +
+					`BSS start:  0x${hex(this.bssOrigin)}`,
 			);
 		}
 	}
@@ -499,7 +490,7 @@ export class RamAllocator {
 		const origin = this.codeCursor;
 		const lib = compile(this.rootDir, filePath, origin, this.bssCursor);
 
-		this.allocateCode(lib.bin.length * 4, `${filePath} (Main Body)`);
+		this.allocate(lib.bin.length * 4, `${filePath} (Main Body)`);
 
 		const bssEnd = lib.symbols["__bss_end"];
 		if (bssEnd !== undefined) {
@@ -507,8 +498,8 @@ export class RamAllocator {
 			if (this.bssCursor > this.endAddr) {
 				throw new Error(
 					`BSS allocation for '${filePath}' exceeds memory limit.\n` +
-						`BSS limit:  0x${this.bssCursor.toString(16).toUpperCase()}\n` +
-						`Memory End: 0x${this.endAddr.toString(16).toUpperCase()}`,
+						`BSS limit:  0x${hex(this.bssCursor)}\n` +
+						`Memory End: 0x${hex(this.endAddr)}`,
 				);
 			}
 		}
@@ -518,18 +509,7 @@ export class RamAllocator {
 			bin: lib.bin,
 			symbols: lib.symbols,
 			origin,
-			hooks: new CodeBuilder(),
-			ram: this,
-			sym(name) {
-				const value = mod.symbols[name];
-				if (value === undefined) {
-					const available = Object.keys(mod.symbols).sort().join(", ");
-					throw new Error(
-						`Symbol "${name}" not found in ${filePath}. Available: ${available}`,
-					);
-				}
-				return value;
-			},
+			hooks: [],
 		};
 
 		for (const spec of hooks) {
@@ -547,14 +527,14 @@ export class RamAllocator {
 		}
 		assertAligned(spec.at, 4, `Hook "${spec.symbol}" address`);
 
-		const targetAddr = mod.sym(spec.symbol);
-		const originalCode = instructionCode(spec.expected);
+		const target = resolveSymbol(mod.symbols, spec.symbol, mod.path);
+		const expected = instructionCode(spec.expected);
 		const trampolineAddr = this.codeCursor;
 
 		// トランポリン: レジスタ退避 -> C 関数呼び出し -> 復帰
 		const trampoline = [
 			ARM_PUSH,
-			call(trampolineAddr + 4, targetAddr),
+			call(trampolineAddr + 4, target),
 			ARM_POP,
 		];
 
@@ -565,7 +545,7 @@ export class RamAllocator {
 				jump(trampolineAddr + trampoline.length * 4, spec.resumeAt),
 			);
 		} else {
-			trampoline.push(originalCode);
+			trampoline.push(expected);
 			trampoline.push(
 				jump(trampolineAddr + trampoline.length * 4, spec.at + 4),
 			);
@@ -573,12 +553,14 @@ export class RamAllocator {
 
 		mod.bin.push(...trampoline);
 
-		mod.hooks
-			.ifEq32(spec.at, originalCode)
+		const hook = new CodeBuilder();
+		hook
+			.ifEq32(spec.at, expected)
 			.write32(spec.at, jump(spec.at, trampolineAddr))
 			.endAllIf();
+		mod.hooks.push(...hook.words);
 
-		this.allocateCode(
+		this.allocate(
 			trampoline.length * 4,
 			`${mod.path}::${spec.symbol} (Hook Trampoline)`,
 		);
