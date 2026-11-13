@@ -21,7 +21,7 @@ local runtime_cheat_names = {
 }
 
 -- TypeScript でビルド・コード生成を行う
-local build_command = "node --experimental-strip-types build.ts"
+local build_command = "make"
 print(build_command)
 
 local status = os.execute(build_command)
@@ -30,7 +30,7 @@ if status ~= 0 and status ~= true then
 end
 
 -- 生成された Action Replay コードを読み込む
-local loaded_cheats = ar.load("build/cheats.ar")
+local loaded_cheats = ar.load("dist/cheats.ar")
 local cheats_by_name = {}
 for _, cheat in ipairs(loaded_cheats) do
 	cheats_by_name[cheat.name] = cheat

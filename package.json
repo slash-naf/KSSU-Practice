@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --experimental-strip-types build.ts",
-    "typecheck": "tsc --noEmit"
+    "build": "make",
+    "typecheck": "make typecheck"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

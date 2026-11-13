@@ -14,37 +14,55 @@ export interface OutputOptions {
 	games: readonly Game[];
 }
 
-/** チート一式を dist / build に出力する */
+/**
+ * 既存ファイルと内容が異なる場合だけ backup フォルダへ退避してから書き込む。
+ * 戻り値は書き込んだかどうか。
+ */
+function writeOutputFile(filePath: string, data: string | Buffer): boolean {
+	const next = typeof data === "string" ? Buffer.from(data) : data;
+
+	if (fs.existsSync(filePath)) {
+		const existing = fs.readFileSync(filePath);
+		if (existing.equals(next)) return false;
+
+		const backupPath = path.join(
+			path.dirname(filePath),
+			"backup",
+			path.basename(filePath),
+		);
+		fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+		fs.copyFileSync(filePath, backupPath);
+	}
+
+	fs.writeFileSync(filePath, data);
+	return true;
+}
+
+/** チート一式を dist に出力する */
 export function writeOutputs(options: OutputOptions): void {
 	const { rootDir, databaseName, games } = options;
 	const distDir = path.join(rootDir, "dist");
-	const buildDir = path.join(rootDir, "build");
 
 	fs.mkdirSync(distDir, { recursive: true });
-	fs.mkdirSync(buildDir, { recursive: true });
 
+	let updated = false;
 	for (const game of games) {
 		const dctPath = path.join(distDir, game.dctFileName);
-		fs.writeFileSync(dctPath, writeDct(game));
-		console.log(`Generated ${path.relative(rootDir, dctPath)}`);
+		updated = writeOutputFile(dctPath, writeDct(game)) || updated;
 	}
 
 	const usrCheatPath = path.join(distDir, "usrcheat.dat");
-	fs.writeFileSync(usrCheatPath, writeUsrCheat(databaseName, games));
+	updated =
+		writeOutputFile(usrCheatPath, writeUsrCheat(databaseName, games)) ||
+		updated;
 
-	const arPath = path.join(buildDir, "cheats.ar");
-	const arCheats = games.flatMap((game) => game.cheats);
-	fs.writeFileSync(
-		arPath,
-		arCheats.map((cheat) => cheat.code.toString(cheat.name)).join(""),
-	);
+	const arContent = games
+		.flatMap((game) => game.cheats)
+		.map((cheat) => cheat.code.toString(cheat.name))
+		.join("");
 
-	for (const game of games) {
-		console.log(`[${game.name}]`);
-		for (const cheat of game.cheats) {
-			console.log(`  ${cheat.name}: ${cheat.code.words.length / 2} code line(s)`);
-		}
-	}
-	console.log(`Generated ${path.relative(rootDir, usrCheatPath)}`);
-	console.log(`Generated ${path.relative(rootDir, arPath)}`);
+	const arPath = path.join(distDir, "cheats.ar");
+	updated = writeOutputFile(arPath, arContent) || updated;
+
+	console.log(updated ? "dist: updated" : "dist: up to date");
 }

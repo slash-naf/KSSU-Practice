@@ -35,10 +35,19 @@ ifneq ($(PREV_PARAMS),$(CURR_PARAMS))
 .PHONY: $(PARAMS)
 endif
 
-# --- ビルドロール ---
-.PHONY: all clean
+# --- ビルドルール ---
+.PHONY: all module typecheck clean
 
-all: $(BUILD) $(BIN) $(SYMBOLS)
+# 既定のビルド: build.ts を実行して dist にチート一式を出力する
+all:
+	@node --experimental-strip-types build.ts
+
+# Cモジュールのビルド (tools/scripts/ar.ts から呼び出される)
+module: $(BUILD) $(BIN) $(SYMBOLS)
+
+# 型チェックのみ
+typecheck:
+	@npx tsc --noEmit
 
 # ビルドディレクトリ作成
 $(BUILD):

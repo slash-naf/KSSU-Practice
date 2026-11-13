@@ -147,13 +147,22 @@ function compile(
 	const name = moduleName(filePath);
 	const cmd = [
 		"make",
+		"--no-print-directory",
+		"module",
 		`SRC=source/${filePath}`,
 		`ADDR=0x${hex(origin)}`,
 		`BSS=0x${hex(bss)}`,
 	].join(" ");
 
-	console.log(cmd);
-	execSync(cmd, { cwd: rootDir, stdio: "inherit" });
+	try {
+		execSync(cmd, { cwd: rootDir, stdio: "pipe" });
+	} catch (error) {
+		// 失敗時だけコンパイラの出力を見せる
+		const { stdout, stderr } = error as { stdout?: Buffer; stderr?: Buffer };
+		const output = `${stdout ?? ""}${stderr ?? ""}`.trim();
+		if (output) console.error(output);
+		throw error;
+	}
 
 	const binPath = path.join(rootDir, "build", `${name}.bin`);
 	const symPath = path.join(rootDir, "build", `${name}.txt`);

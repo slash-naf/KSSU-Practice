@@ -132,9 +132,9 @@ KSSU-Practice/
 │       └── desmume_api.lua   # Lua Language Server 用のAPI定義
 ├── dist/                # 生成物 (Git管理外)
 │   ├── KIRBY_USDX_J_YKWJ01_00.dct
-│   └── usrcheat.dat
-├── build/               # 中間ファイル・実行用ARコード (Git管理外)
+│   ├── usrcheat.dat
 │   └── cheats.ar
+├── build/               # 中間ファイル (Git管理外)
 ├── package.json         # npm スクリプト・依存パッケージ
 ├── tsconfig.json        # TypeScript 設定
 └── compile_flags.txt    # clangd 用コンパイル設定
@@ -157,7 +157,7 @@ TypeScriptのビルドを実行し、生成されたARコードを読み込ん�
 #### `build.ts`
 ビルド設定とチートの一覧を記述するメインスクリプト。
 メモリ配置、モジュールの読み込み、フックの設定、各チートの生成を行う。
-`.dct` / `usrcheat.dat` / `build/cheats.ar` の出力は `writeOutputs` に任せる。
+`.dct` / `usrcheat.dat` / `cheats.ar` の出力は `writeOutputs` に任せる。
 
 ゲームごとのメタ情報（ゲームID、CRC、ゲーム名、シリアル、`.dct` ファイル名）とチート一覧は `Game` クラスで定義し、`games` 配列に追加する。
 `games` に複数のゲームを追加すると、ゲームごとに `.dct` が出力され、すべてのゲームが `usrcheat.dat` に含まれる。
@@ -197,7 +197,9 @@ TypeScript版のビルド＆ARコード生成エンジン。
 `writeOutputs({ rootDir, databaseName, games })` で以下をまとめて出力する。
 - ゲームごとの `.dct`
 - 全ゲームを含む `usrcheat.dat`
-- Lua実行用の `build/cheats.ar`（全チート。実行するものは `exec.lua` で選択）
+- 全チートの AR コード (`dist/cheats.ar`。Lua で実行するものは `exec.lua` で選択)
+
+出力先に既存ファイルがあり、生成結果がそれと一致しない場合は、上書き前に `dist/backup/` へバックアップが作成される。内容が同じファイルは書き換えない。ビルド結果が既存ファイルと一致したかどうかは `dist: up to date` / `dist: updated` の1行で表示する。
 
 #### `tools/scripts/formats/`
 チート・ゲーム情報と出力フォーマットの実装。
@@ -207,7 +209,7 @@ TypeScript版のビルド＆ARコード生成エンジン。
 
 #### `tools/desmume/ActionReplay.lua`
 生成済みARコードの読み込みと実行のみを行うモジュール。
-- **ARコードの読み込み**: `build/cheats.ar` を解析してチートごとのコード列にする。
+- **ARコードの読み込み**: `dist/cheats.ar` を解析してチートごとのコード列にする。
 - **エミュレータへの注入**: 読み込んだコードを DeSmuME のメモリに直接書き込み、効果を発揮させる。
 
 #### `tools/desmume/desmume_api.lua`
@@ -238,7 +240,8 @@ Lua Language Server 向けのDeSmuME Lua API定義。編集ツールの補完用
 
 #### `makefile`
 通常は編集する必要はない。
-`tools/scripts/ar.ts` から `make SRC=... ADDR=... BSS=...` のように引数付きで呼び出され、指定されたソースコードを指定されたアドレス向けにビルドするように設計されている。
+`make`（または `make all`）で `build.ts` を実行して `dist/` にチート一式を出力する。
+`tools/scripts/ar.ts` からは `make module SRC=... ADDR=... BSS=...` のようにモジュール指定で呼び出され、指定されたソースコードを指定されたアドレス向けにビルドするように設計されている。
 
 ## ベアメタル
 
@@ -388,14 +391,14 @@ code.retargetCallAt({
 プロジェクトのルートで以下を実行する。
 
 ```bash
-npm run build
+make
 ```
 
-内部的には `node --experimental-strip-types build.ts` が実行され、CソースのコンパイルとARコードの生成が行われる。
+`make` は `node --experimental-strip-types build.ts` を実行し、CソースのコンパイルとARコードの生成を行う（`npm run build` も同じ `make` を呼び出す）。
 型チェックのみ行う場合は以下を実行する。
 
 ```bash
-npm run typecheck
+make typecheck
 ```
 
 #### DeSmuME上で実行する
@@ -405,9 +408,9 @@ DeSmuME を起動し、ゲームを読み込む。
 1. メニューの `Tools` > `Lua Scripting` > `New Lua Script Window` を開く。
 2. `Browse...` をクリックし、`exec.lua` を選択して開く。
 3. 自動的にビルドが実行される。
-   - `exec.lua` が `node --experimental-strip-types build.ts` を呼び出す。`node` にPATHが通っていること、カレントディレクトリがプロジェクトのルートであることを確認する。
+   - `exec.lua` が `make` を呼び出す。`make` と `node` にPATHが通っていること、カレントディレクトリがプロジェクトのルートであることを確認する。
    - ビルドログが表示される。エラーがあればここに表示されるため確認する。
-4. ビルドが成功すると、`build/cheats.ar` が読み込まれ、`exec.lua` の `runtime_cheat_names` に指定したチートが即座にゲーム内に適用される。
+4. ビルドが成功すると、`dist/cheats.ar` が読み込まれ、`exec.lua` の `runtime_cheat_names` に指定したチートが即座にゲーム内に適用される。
    - 生成されたコードがエミュレータ上のメモリへ即座に注入されるため、外部チート機能に手動登録する必要はない。
    - ソースコードや `build.ts` を修正したら、Luaウィンドウの `Restart` ボタンを押すだけで再ビルド・再適用される。その後チートが実行されていない状態をQLすればメモリが新しい処理に書き換わる。
 
@@ -417,8 +420,13 @@ DeSmuME を起動し、ゲームを読み込む。
 
 - `dist/KIRBY_USDX_J_YKWJ01_00.dct`: DeSmuME用のチートファイル（`games` の各ゲームごとに1ファイル）。
 - `dist/usrcheat.dat`: R4等のフラッシュカード用チートデータベース。`games` の全ゲームが含まれる。実機ではこれをSDカードに配置して使用する。
+- `dist/cheats.ar`: 全チートの AR コード。Lua 実行時はこのファイルが読み込まれる。
 
-ゲーム名・シリアル・CRCなどのメタ情報とデータベース名は `build.ts` で指定する。Luaの実行ログにはコード全文は出力されず、`build/cheats.ar` を介して実行される。
+既存の出力ファイルと生成結果が一致しない場合、上書き前に `dist/backup/`（例: `dist/backup/usrcheat.dat`）へバックアップが作成される。一致する場合はバックアップも書き込みも行わない。
+
+ビルド時は、出力が既存ファイルと一致したかどうかを示す1行だけを表示する（`dist: up to date` または `dist: updated`）。
+
+ゲーム名・シリアル・CRCなどのメタ情報とデータベース名は `build.ts` で指定する。Luaの実行ログにはコード全文は出力されず、`dist/cheats.ar` を介して実行される。
 
 ## Action Replayコードの仕組み
 
