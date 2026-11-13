@@ -131,11 +131,37 @@ local function execute(codes)
 	end
 end
 
+--- チート名の一覧に一致するチートだけを取り出す
+---@param cheats table[]
+---@param names string[]
+---@return table[]
+local function select_by_name(cheats, names)
+	local by_name = {}
+	for _, cheat in ipairs(cheats) do
+		by_name[cheat.name] = cheat
+	end
+
+	local selected = {}
+	for _, name in ipairs(names) do
+		local cheat = by_name[name]
+		if not cheat then
+			error("Cheat not found: " .. name)
+		end
+		table.insert(selected, cheat)
+	end
+	return selected
+end
+
 --- 生成済み AR ファイルを読み込む
 ---@param path string
+---@param names? string[] 実行するチート名 (省略時はすべて読み込む)
 ---@return table[]
-function M.load(path)
-	return read_codes(path)
+function M.load(path, names)
+	local cheats = read_codes(path)
+	if not names then
+		return cheats
+	end
+	return select_by_name(cheats, names)
 end
 
 --- チート 1 件を実行する
