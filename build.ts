@@ -57,7 +57,7 @@ function createKirbyCheats(): Cheat[] {
 		(code) => {
 			// 格闘王系モードでの下画面のボスの表示を通常時に切り替える処理の、
 			// ゲームモードに応じたリソースをロードする処理を上書き
-			code.replaceFunction(code.sym("ArenaImageSwitcher"), {
+			code.override(code.sym("ArenaImageSwitcher"), {
 				at: 0x0206ce20,
 				expected: insn(0xe3500007, "cmp r0, #7"),
 				resumeAt: 0x0206cf68,
@@ -71,17 +71,17 @@ function createKirbyCheats(): Cheat[] {
 				.endAllIf();
 
 			// 数値描画
-			code.jumpToAt(code.sym("DrawNumbers"), {
+			code.redirectFunction(code.sym("DrawNumbers"), {
 				at: 0x02090d48,
 				expected: insn(0xe92d41f0, "stmdb sp!, {r4-r8, lr}"),
 			});
 			// スコア・ゴールドを消す
-			code.earlyReturnAt({
+			code.disableFunction({
 				at: 0x020904c8,
 				expected: insn(0xe92d4ff8, "stmdb sp!, {r3-r11, lr}"),
 			});
 			// タイマーを消す
-			code.earlyReturnAt({
+			code.disableFunction({
 				at: 0x020905a4,
 				expected: insn(0xe92d41f0, "stmdb sp!, {r4-r8, lr}"),
 			});
@@ -195,11 +195,7 @@ function createKirbyCheats(): Cheat[] {
 		name,
 		enabled: false,
 		code: new CodeBuilder((code) => {
-			code.retargetCallAt({
-				at,
-				from: Symbols.Randi,
-				to: monitorRng.sym("RandiWithUpdate"),
-			});
+			code.retargetCall(at, Symbols.Randi, monitorRng.sym("RandiWithUpdate"));
 		}),
 	}));
 

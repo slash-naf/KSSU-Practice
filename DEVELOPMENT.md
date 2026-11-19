@@ -313,7 +313,7 @@ const myCheat = new CodeBuilder(
 ```
 
 - `expected`: フック対象の命令。実際の命令と一致したときだけフックが適用される（バージョン違いの事故防止）。
-- `returnWith` / `resumeAt`: フック後の動作。`returnWith` は命令を実行して元の処理へ戻り、`resumeAt` は指定アドレスへジャンプする。どちらも省略すると、元の命令を実行して `at + 4` から再開する。
+- `returnWith` / `resumeAt`: フック後の動作。`returnWith` は指定された命令を実行し、`resumeAt` は指定アドレスへジャンプする。どちらも省略すると、元の場所から再開する。
 
 トランポリンコード（レジスタ退避 → C 関数呼び出し → 復帰）は自動生成される。
 
@@ -349,39 +349,38 @@ code
 
 `if*` を呼んだら、必ず `endAllIf()` で閉じること。閉じ忘れは `toString()` がエラーにする。
 
-#### 関数の差し替え
+#### 関数・命令の書き換え
 
-フックではなく、ゲーム側の関数そのものを自作関数へ置き換える場合は以下のメソッドを使う。
+フックではなく、ゲーム側の命令を直接書き換える場合は以下のメソッドを使う。
 
 | メソッド | 用途 |
 | --- | --- |
-| `replaceFunction(targetFunc, { at, expected, resumeAt? })` | ゲーム側の処理を自作関数で置き換え、`resumeAt` から再開する |
-| `jumpToAt(targetFunc, { at, expected })` | 指定アドレスの命令を自作関数への `b` に置き換える |
-| `earlyReturnAt({ at, expected })` | 指定アドレスに `bx lr` を書き込み、処理を即座に return させる |
-| `retargetCallAt({ at, from, to })` | 既存の `bl` 命令の呼び出し先だけを差し替える |
+| `override(callee, { at, expected, resumeAt?, returnWith? })` | `at` の命令を自作関数への `bl` に置き換え、`resumeAt` / `returnWith` で後続を制御する |
+| `redirectFunction(target, { at, expected })` | 関数先頭の命令を自作関数への `b` に置き換える（戻らない） |
+| `disableFunction({ at, expected })` | 関数先頭に `bx lr` を書き込み、即座に return させる |
+| `retargetCall(at, oldTarget, newTarget)` | 既存の `bl` 命令の呼び出し先だけを差し替える |
+| `retargetJump(at, oldTarget, newTarget)` | 既存の `b` 命令の飛び先だけを差し替える |
+
+`redirectFunction` / `disableFunction` は関数先頭での使用を想定している。`override` は `lr` が退避済みの任意の命令位置で使える。
 
 ```ts
-code.replaceFunction(code.sym("ArenaImageSwitcher"), {
+code.override(code.sym("ArenaImageSwitcher"), {
 	at: 0x0206ce20,
 	expected: insn(0xe3500007, "cmp r0, #7"),
 	resumeAt: 0x0206cf68,
 });
 
-code.jumpToAt(code.sym("DrawNumbers"), {
+code.redirectFunction(code.sym("DrawNumbers"), {
 	at: 0x02090d48,
 	expected: insn(0xe92d41f0, "stmdb sp!, {r4-r8, lr}"),
 });
 
-code.earlyReturnAt({
+code.disableFunction({
 	at: 0x020904c8,
 	expected: insn(0xe92d4ff8, "stmdb sp!, {r3-r11, lr}"),
 });
 
-code.retargetCallAt({
-	at: 0x020c42a0,
-	from: 0x0200b8a4,
-	to: code.sym("RandiWithUpdate"),
-});
+code.retargetCall(0x020c42a0, 0x0200b8a4, code.sym("RandiWithUpdate"));
 ```
 
 ### ビルドと実行 (Build & Run)

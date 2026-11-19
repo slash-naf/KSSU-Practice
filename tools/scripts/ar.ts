@@ -403,47 +403,70 @@ export class CodeBuilder {
 		]).append(padded);
 	}
 
-	/** 関数を丸ごと差し替える */
-	replaceFunction(
-		targetFunc: number,
-		options: { at: number; expected: Instruction; resumeAt?: number },
+	/**
+	 * at の命令を callee への bl に置き換える。
+	 * callee を終えると resumeAt へのジャンプか、returnWith の実行。
+	 */
+	override(
+		callee: number,
+		options: {
+			at: number;
+			expected: Instruction;
+			resumeAt?: number;
+			returnWith?: Instruction;
+		},
 	): this {
-		assertAligned(options.at, 4, "replaceFunction address");
+		if (options.resumeAt !== undefined && options.returnWith !== undefined) {
+			throw new Error(
+				"override: resumeAt and returnWith cannot be used together",
+			);
+		}
+		assertAligned(options.at, 4, "override address");
 		this.ifEq32(options.at, instructionCode(options.expected));
-		this.write32(options.at, call(options.at, targetFunc));
+		this.write32(options.at, call(options.at, callee));
 
 		if (options.resumeAt !== undefined) {
 			const addr = options.at + 4;
 			this.write32(addr, jump(addr, options.resumeAt));
+		} else if (options.returnWith !== undefined) {
+			this.write32(options.at + 4, instructionCode(options.returnWith));
 		}
 
 		return this.endAllIf();
 	}
 
-	/** 指定アドレスの命令を自作関数へのジャンプに置き換える */
-	jumpToAt(
-		targetFunc: number,
+	/** 関数先頭の命令を target への b に置き換える。*/
+	redirectFunction(
+		target: number,
 		options: { at: number; expected: Instruction },
 	): this {
-		assertAligned(options.at, 4, "jumpToAt address");
+		assertAligned(options.at, 4, "redirectFunction address");
 		return this.ifEq32(options.at, instructionCode(options.expected))
-			.write32(options.at, jump(options.at, targetFunc))
+			.write32(options.at, jump(options.at, target))
 			.endAllIf();
 	}
 
-	/** 関数の先頭で即座に return させる */
-	earlyReturnAt(options: { at: number; expected: Instruction }): this {
-		assertAligned(options.at, 4, "earlyReturnAt address");
+	/** 関数先頭に bx lr を書き込み、即座に return させる。*/
+	disableFunction(options: { at: number; expected: Instruction }): this {
+		assertAligned(options.at, 4, "disableFunction address");
 		return this.ifEq32(options.at, instructionCode(options.expected))
 			.write32(options.at, ARM_RET)
 			.endAllIf();
 	}
 
-	/** 既存の bl 命令の呼び出し先だけを差し替える */
-	retargetCallAt(options: { at: number; from: number; to: number }): this {
-		assertAligned(options.at, 4, "retargetCallAt address");
-		return this.ifEq32(options.at, call(options.at, options.from))
-			.write32(options.at, call(options.at, options.to))
+	/** at の bl oldTarget を bl newTarget に差し替える */
+	retargetCall(at: number, oldTarget: number, newTarget: number): this {
+		assertAligned(at, 4, "retargetCall address");
+		return this.ifEq32(at, call(at, oldTarget))
+			.write32(at, call(at, newTarget))
+			.endAllIf();
+	}
+
+	/** at の b oldTarget を b newTarget に差し替える */
+	retargetJump(at: number, oldTarget: number, newTarget: number): this {
+		assertAligned(at, 4, "retargetJump address");
+		return this.ifEq32(at, jump(at, oldTarget))
+			.write32(at, jump(at, newTarget))
 			.endAllIf();
 	}
 
