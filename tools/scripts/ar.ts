@@ -180,8 +180,8 @@ export class CodeBuilder {
 		this.symbolSource = mod?.path ?? "(no module)";
 
 		if (mod) {
-			// 配置先がまだ 0 のときだけモジュール本体を書き込む
-			this.patch({ at: mod.origin, expected: 0 }, mod.bin);
+			// 未配置時だけモジュール本体を書き込む
+			this.patch({ at: mod.origin }, mod.bin);
 			this.append(mod.hooks);
 		}
 
