@@ -10,36 +10,31 @@ const U32_MAX = 0xFFFFFFFF;
 const ARM_PUSH = 0xE92D5FFF; // stmdb r13!,{r0-r12,r14}
 const ARM_POP = 0xE8BD5FFF; // ldmia r13!,{r0-r12,r14}
 const ARM_RET = 0xE12FFF1E; // bx r14
-const ARM_B = 0xEA000000;
-const ARM_BL = 0xEB000000;
-const BRANCH_OFFSET_MASK = 0x00FFFFFF;
-const BRANCH_PC_BIAS = 2;
-
-// Action Replay コードのプレフィックス
-const AR_WRITE16 = 0x10000000;
-const AR_WRITE8 = 0x20000000;
-const AR_COND16 = 0x40000000;
-const AR_END_IF = 0xD2000000;
-const AR_PATCH = 0xE0000000;
-const CONDITION_UNIT = 0x10000000;
-
-// 条件コードの種類
-const CMP_LT = 3;
-const CMP_GT = 4;
-const CMP_EQ = 5;
-const CMP_NE = 6;
-
-/** 32bit unsigned に丸める */
-const u32 = (n: number): number => n >>> 0;
 
 /** 16進数表記にする */
-const hex = (value: number, width = 8): string =>
-	value.toString(16).toUpperCase().padStart(width, "0");
+const hex = (value: number, width = 8): string => value.toString(16).toUpperCase().padStart(width, "0");
+
+/** ARコードの2ワード。prefix はコード種別、addr はアドレス、value は値 */
+const arCode = (prefix: number, addr: number, value: number): [number, number] => [(prefix * 0x10000000 + addr) >>> 0, value >>> 0];
 
 /** 命令コード。text はリスティング用の表示名。 */
-export type Instruction =
-	| number
-	| { readonly code: number; readonly text: string };
+export type Instruction = number | { readonly code: number; readonly text: string };
+
+/** 書き換え対象。expected を省略すると words[0] と異なるときだけ書き込む。 */
+export interface RewriteTarget {
+	/** 書き換えるアドレス */
+	readonly at: number;
+	/** 書き換え前の命令 */
+	readonly expected?: Instruction;
+}
+
+/** フック／上書き後の戻り方。returnWith と resumeAt は併用不可 */
+export interface Continuation {
+	/** 戻り先で実行する命令 (通常は return 命令) */
+	returnWith?: Instruction;
+	/** 戻り先アドレス */
+	resumeAt?: number;
+}
 
 /** 表示名付きの命令を作る */
 export function insn(code: number, text: string): Instruction {
@@ -78,13 +73,9 @@ function assertAligned(addr: number, alignment: number, label: string): void {
 }
 
 /** 分岐命令 (b / bl) を組み立てる */
-function branch(opcode: number, from: number, to: number): number {
-	const offset = u32((to - from) >>> 2);
-	return u32(opcode + ((offset - BRANCH_PC_BIAS) & BRANCH_OFFSET_MASK));
-}
-
-const jump = (from: number, to: number): number => branch(ARM_B, from, to);
-const call = (from: number, to: number): number => branch(ARM_BL, from, to);
+const branch = (opcode: number) => (from: number, to: number) => opcode + ((((to - from) >>> 2) - 2) & 0x00ffffff);
+const jump = branch(0xea000000); // b
+const call = branch(0xeb000000); // bl
 
 /** シンボルを取得する。存在しなければ例外を投げる */
 function resolveSymbol(
@@ -108,17 +99,9 @@ interface BuildLibrary {
 }
 
 /** C モジュールの関数をゲームコードにフックする定義 */
-export interface HookSpec {
+export interface HookSpec extends Required<RewriteTarget>, Continuation {
 	/** モジュール内の関数シンボル名 */
 	symbol: string;
-	/** フックするゲーム側のアドレス */
-	at: number;
-	/** 上書きされる元の命令。一致したときだけフックする */
-	expected: Instruction;
-	/** フック後に実行する命令 (通常は return 命令) */
-	returnWith?: Instruction;
-	/** フック後にジャンプするアドレス。returnWith とは併用不可 */
-	resumeAt?: number;
 }
 
 /** コンパイル済みの C モジュール */
@@ -169,16 +152,7 @@ function compile(
 
 	const data = fs.readFileSync(binPath);
 	const bin: number[] = [];
-	for (let i = 0; i < data.length; i += 4) {
-		bin.push(
-			u32(
-				(data[i] ?? 0) |
-					((data[i + 1] ?? 0) << 8) |
-					((data[i + 2] ?? 0) << 16) |
-					((data[i + 3] ?? 0) << 24),
-			),
-		);
-	}
+	for (let i = 0; i < data.length; i += 4) bin.push(data.readUInt32LE(i));
 
 	const symbols: Record<string, number> = {};
 	const symbolText = fs.readFileSync(symPath, "utf8");
@@ -207,7 +181,7 @@ export class CodeBuilder {
 
 		if (mod) {
 			// 配置先がまだ 0 のときだけモジュール本体を書き込む
-			this.ifEq32(mod.origin, 0).patch(mod.origin, mod.bin).endAllIf();
+			this.patch({ at: mod.origin, expected: 0 }, mod.bin);
 			this.append(mod.hooks);
 		}
 
@@ -219,64 +193,48 @@ export class CodeBuilder {
 		return resolveSymbol(this.symbols, name, this.symbolSource);
 	}
 
-	append(values: number | readonly number[]): this {
-		if (typeof values === "number") {
-			this.words.push(assertU32(values, "code word"));
-		} else {
-			for (const value of values) {
-				this.words.push(assertU32(value, "code word"));
-			}
-		}
+	append(values: readonly number[]): this {
+		for (const value of values) this.words.push(assertU32(value, "code word"));
 		return this;
 	}
 
-	write32(addr: number, value: number): this {
-		return this.append([addr, value]);
+	/** 書き込みコード (prefix: 0=32bit, 1=16bit, 2=8bit) */
+	private write(prefix: 0 | 1 | 2) {
+		return (addr: number, value: number): this =>
+			this.append(
+				arCode(
+					prefix,
+					assertU32(addr, "write address"),
+					assertRange(value, [U32_MAX, U16_MAX, U8_MAX][prefix], "write value"),
+				),
+			);
 	}
 
-	write16(addr: number, value: number): this {
-		return this.append([
-			u32(AR_WRITE16 + assertU32(addr, "write16 address")),
-			assertRange(value, U16_MAX, "write16 value"),
-		]);
-	}
-
-	write8(addr: number, value: number): this {
-		return this.append([
-			u32(AR_WRITE8 + assertU32(addr, "write8 address")),
-			assertRange(value, U8_MAX, "write8 value"),
-		]);
-	}
-
-	/** 32bit 比較コード */
-	private cmp32(op: number, addr: number, value: number): [number, number] {
-		assertAligned(addr, 4, "32bit condition address");
-		return [
-			u32(op * CONDITION_UNIT + assertU32(addr, "condition address")),
-			assertU32(value, "condition value"),
-		];
-	}
+	write32 = this.write(0);
+	write16 = this.write(1);
+	write8 = this.write(2);
 
 	/**
-	 * 16bit マスク比較コード。
-	 * mask は比較するビット、value はマスク後の期待値。
+	 * 条件コード (op: 3=LT, 4=GT, 5=EQ, 6=NE)。
+	 * 8bit は 16bit 条件の該当バイトに寄せる。
 	 */
-	private cmp16(
+	private cmp(
+		bits: 8 | 16 | 32,
 		op: number,
 		addr: number,
 		value: number,
-		mask: number,
+		mask = bits === 8 ? U8_MAX : U16_MAX,
 	): [number, number] {
-		assertAligned(addr, 2, "16bit condition address");
-		const invertedMask = ~mask & U16_MAX;
-		return [
-			u32(
-				op * CONDITION_UNIT +
-					assertU32(addr, "condition address") +
-					AR_COND16,
-			),
-			u32(value + (invertedMask << 16)),
-		];
+		assertAligned(addr, bits / 8, `${bits}bit condition address`);
+		const base = assertU32(addr, "condition address");
+		if (bits === 32) {
+			return arCode(op, base, assertU32(value, "condition value"));
+		}
+		const shift = (addr & 1) * 8;
+		const max = bits === 8 ? U8_MAX : U16_MAX;
+		const m = assertRange(mask, max, `${bits}bit condition mask`) << shift;
+		const v = assertRange(value, max, `${bits}bit condition value`) << shift;
+		return arCode(op + 4, base & ~1, v + ((~m & U16_MAX) << 16));
 	}
 
 	/** 条件コードを追加し、endAllIf() まで条件ブロックを開く */
@@ -286,102 +244,41 @@ export class CodeBuilder {
 		return this;
 	}
 
-	private if8(op: number, addr: number, value: number, mask = U8_MAX): this {
-		const bits = assertRange(value, U8_MAX, "8bit condition value");
-		const maskBits = assertRange(mask, U8_MAX, "8bit condition mask");
-		const shift = (addr & 1) * 8;
-		return this.condition(
-			this.cmp16(op, addr & ~1, bits << shift, maskBits << shift),
-		);
+	/** 8/16bit 比較。mask は比較するビット */
+	private cond(bits: 8 | 16, op: number) {
+		return (addr: number, value: number, mask?: number): this =>
+			this.condition(this.cmp(bits, op, addr, value, mask));
 	}
 
-	private if16(op: number, addr: number, value: number, mask = U16_MAX): this {
-		return this.condition(
-			this.cmp16(
-				op,
-				addr,
-				assertRange(value, U16_MAX, "16bit condition value"),
-				assertRange(mask, U16_MAX, "16bit condition mask"),
-			),
-		);
+	/** 32bit 比較 */
+	private cond32(op: number) {
+		return (addr: number, value: number): this =>
+			this.condition(this.cmp(32, op, addr, value));
 	}
 
-	private if32(op: number, addr: number, value: number): this {
-		return this.condition(this.cmp32(op, addr, value));
+	/** ビット判定 (all=false: いずれか、all=true: すべて) */
+	private bit(bits: 8 | 16, all: boolean) {
+		return (addr: number, mask: number): this =>
+			this.cond(bits, all ? 5 : 6)(addr, all ? mask : 0, mask);
 	}
 
-	ifLt8(addr: number, value: number): this {
-		return this.if8(CMP_LT, addr, value);
-	}
+	ifLt8 = this.cond(8, 3);
+	ifGt8 = this.cond(8, 4);
+	ifEq8 = this.cond(8, 5);
+	ifNe8 = this.cond(8, 6);
+	ifLt16 = this.cond(16, 3);
+	ifGt16 = this.cond(16, 4);
+	ifEq16 = this.cond(16, 5);
+	ifNe16 = this.cond(16, 6);
+	ifLt32 = this.cond32(3);
+	ifGt32 = this.cond32(4);
+	ifEq32 = this.cond32(5);
+	ifNe32 = this.cond32(6);
 
-	ifGt8(addr: number, value: number): this {
-		return this.if8(CMP_GT, addr, value);
-	}
-
-	ifEq8(addr: number, value: number): this {
-		return this.if8(CMP_EQ, addr, value);
-	}
-
-	ifNe8(addr: number, value: number): this {
-		return this.if8(CMP_NE, addr, value);
-	}
-
-	ifLt16(addr: number, value: number): this {
-		return this.if16(CMP_LT, addr, value);
-	}
-
-	ifGt16(addr: number, value: number): this {
-		return this.if16(CMP_GT, addr, value);
-	}
-
-	ifEq16(addr: number, value: number): this {
-		return this.if16(CMP_EQ, addr, value);
-	}
-
-	ifNe16(addr: number, value: number): this {
-		return this.if16(CMP_NE, addr, value);
-	}
-
-	ifLt32(addr: number, value: number): this {
-		return this.if32(CMP_LT, addr, value);
-	}
-
-	ifGt32(addr: number, value: number): this {
-		return this.if32(CMP_GT, addr, value);
-	}
-
-	ifEq32(addr: number, value: number): this {
-		return this.if32(CMP_EQ, addr, value);
-	}
-
-	ifNe32(addr: number, value: number): this {
-		return this.if32(CMP_NE, addr, value);
-	}
-
-	/** (byte[addr] & mask) != 0 */
-	ifAnyBit8(addr: number, mask: number): this {
-		return this.if8(CMP_NE, addr, 0, mask);
-	}
-
-	/** (byte[addr] & mask) == mask */
-	ifAllBits8(addr: number, mask: number): this {
-		return this.if8(CMP_EQ, addr, mask, mask);
-	}
-
-	/** (half[addr] & mask) != 0 */
-	ifAnyBit16(addr: number, mask: number): this {
-		return this.if16(CMP_NE, addr, 0, mask);
-	}
-
-	/** (half[addr] & mask) == mask */
-	ifAllBits16(addr: number, mask: number): this {
-		return this.if16(CMP_EQ, addr, mask, mask);
-	}
-
-	/** 任意マスクの16bit比較。通常は ifAnyBit16 / ifAllBits16 を使う。 */
-	ifEq16Masked(addr: number, value: number, mask: number): this {
-		return this.if16(CMP_EQ, addr, value, mask);
-	}
+	ifAnyBit8 = this.bit(8, false);
+	ifAllBits8 = this.bit(8, true);
+	ifAnyBit16 = this.bit(16, false);
+	ifAllBits16 = this.bit(16, true);
 
 	/** 開いている条件をすべて閉じる */
 	endAllIf(): this {
@@ -389,18 +286,30 @@ export class CodeBuilder {
 			throw new Error("endAllIf() called without an open condition");
 		}
 		this.openIf = false;
-		return this.append([AR_END_IF, 0]);
+		return this.append([0xd2000000, 0]);
 	}
 
-	/** E コードでバイト列（32bit ワード列）を書き込む */
-	patch(dest: number, words: readonly number[]): this {
-		const padded = [...words];
-		if (padded.length % 2 === 1) padded.push(0);
+	/**
+	 * expected と一致したとき words を書き込む。
+	 * expected 省略時は words[0] と異なるときだけ書き込む。
+	 * 3 ワード以下は write32、それ以上は E コードを使う。
+	 */
+	patch({ at, expected }: RewriteTarget, words: readonly number[]): this {
+		if (words.length == 0) throw new Error("patch: words is empty");
+		if (expected === undefined) this.ifNe32(at, words[0]);
+		else this.ifEq32(at, instructionCode(expected));
 
-		return this.append([
-			u32(AR_PATCH + assertU32(dest, "patch destination")),
-			words.length * 4,
-		]).append(padded);
+		if (words.length > 3) {
+			const padded = words.length % 2 === 1 ? [...words, 0] : words;
+			this.append([
+				...arCode(0xe, assertU32(at, "patch destination"), words.length * 4),
+				...padded,
+			]);
+		} else {
+			words.forEach((word, i) => this.write32(at + i * 4, word));
+		}
+
+		return this.endAllIf();
 	}
 
 	/**
@@ -409,65 +318,48 @@ export class CodeBuilder {
 	 */
 	override(
 		callee: number,
-		options: {
-			at: number;
-			expected: Instruction;
-			resumeAt?: number;
-			returnWith?: Instruction;
-		},
+		{
+			at,
+			expected,
+			resumeAt,
+			returnWith,
+		}: Required<RewriteTarget> & Continuation,
 	): this {
-		if (options.resumeAt !== undefined && options.returnWith !== undefined) {
+		if (resumeAt !== undefined && returnWith !== undefined) {
 			throw new Error(
 				"override: resumeAt and returnWith cannot be used together",
 			);
 		}
-		assertAligned(options.at, 4, "override address");
-		this.ifEq32(options.at, instructionCode(options.expected));
-		this.write32(options.at, call(options.at, callee));
-
-		if (options.resumeAt !== undefined) {
-			const addr = options.at + 4;
-			this.write32(addr, jump(addr, options.resumeAt));
-		} else if (options.returnWith !== undefined) {
-			this.write32(options.at + 4, instructionCode(options.returnWith));
+		const words = [call(at, callee)];
+		if (resumeAt !== undefined) words.push(jump(at + 4, resumeAt));
+		else if (returnWith !== undefined) {
+			words.push(instructionCode(returnWith));
 		}
-
-		return this.endAllIf();
+		return this.patch({ at, expected }, words);
 	}
 
 	/** 関数先頭の命令を target への b に置き換える。*/
-	redirectFunction(
-		target: number,
-		options: { at: number; expected: Instruction },
-	): this {
-		assertAligned(options.at, 4, "redirectFunction address");
-		return this.ifEq32(options.at, instructionCode(options.expected))
-			.write32(options.at, jump(options.at, target))
-			.endAllIf();
+	redirectFunction(target: number, options: Required<RewriteTarget>): this {
+		return this.patch(options, [jump(options.at, target)]);
 	}
 
 	/** 関数先頭に bx lr を書き込み、即座に return させる。*/
-	disableFunction(options: { at: number; expected: Instruction }): this {
-		assertAligned(options.at, 4, "disableFunction address");
-		return this.ifEq32(options.at, instructionCode(options.expected))
-			.write32(options.at, ARM_RET)
-			.endAllIf();
+	disableFunction(options: Required<RewriteTarget>): this {
+		return this.patch(options, [ARM_RET]);
 	}
 
 	/** at の bl oldTarget を bl newTarget に差し替える */
 	retargetCall(at: number, oldTarget: number, newTarget: number): this {
-		assertAligned(at, 4, "retargetCall address");
-		return this.ifEq32(at, call(at, oldTarget))
-			.write32(at, call(at, newTarget))
-			.endAllIf();
+		return this.patch({ at, expected: call(at, oldTarget) }, [
+			call(at, newTarget),
+		]);
 	}
 
 	/** at の b oldTarget を b newTarget に差し替える */
 	retargetJump(at: number, oldTarget: number, newTarget: number): this {
-		assertAligned(at, 4, "retargetJump address");
-		return this.ifEq32(at, jump(at, oldTarget))
-			.write32(at, jump(at, newTarget))
-			.endAllIf();
+		return this.patch({ at, expected: jump(at, oldTarget) }, [
+			jump(at, newTarget),
+		]);
 	}
 
 	toString(name: string): string {
@@ -586,10 +478,9 @@ export class RamAllocator {
 		mod.bin.push(...trampoline);
 
 		const hook = new CodeBuilder();
-		hook
-			.ifEq32(spec.at, expected)
-			.write32(spec.at, jump(spec.at, trampolineAddr))
-			.endAllIf();
+		hook.patch({ at: spec.at, expected }, [
+			jump(spec.at, trampolineAddr),
+		]);
 		mod.hooks.push(...hook.words);
 
 		this.allocate(

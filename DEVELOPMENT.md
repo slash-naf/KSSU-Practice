@@ -340,12 +340,11 @@ code
 	.endAllIf();
 ```
 
-- `ifLt8` / `ifGt8` / `ifEq8` / `ifNe8`: 8bit 比較。奇数アドレスもそのバイトだけを比較する。
-- `ifLt16` / `ifGt16` / `ifEq16` / `ifNe16`: 16bit 比較（2バイト境界）。
+- `ifLt8` / `ifGt8` / `ifEq8` / `ifNe8`: 8bit 比較。奇数アドレスもそのバイトだけを比較する。第3引数でマスクを指定できる。
+- `ifLt16` / `ifGt16` / `ifEq16` / `ifNe16`: 16bit 比較（2バイト境界）。第3引数でマスクを指定できる。
 - `ifLt32` / `ifGt32` / `ifEq32` / `ifNe32`: 32bit 比較（4バイト境界）。
 - `ifAnyBit8` / `ifAnyBit16`: マスクしたビットのいずれかが立っている。
 - `ifAllBits8` / `ifAllBits16`: マスクしたビットがすべて立っている。
-- `ifEq16Masked`: 任意マスクの 16bit 比較。通常は上記のビット判定を使う。
 
 `if*` を呼んだら、必ず `endAllIf()` で閉じること。閉じ忘れは `toString()` がエラーにする。
 
