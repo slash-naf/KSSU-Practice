@@ -1,5 +1,6 @@
 # --- プロジェクト設定 ---
 BUILD       := build
+DIST        := dist
 SRC         ?= source/main.c
 ADDR        ?= 0x023FE000
 NAME        := $(basename $(notdir $(SRC)))
@@ -36,7 +37,7 @@ ifneq ($(PREV_PARAMS),$(CURR_PARAMS))
 endif
 
 # --- ビルドルール ---
-.PHONY: all module typecheck clean
+.PHONY: all module typecheck clean diff
 
 # 既定のビルド: build.ts を実行して dist にチート一式を出力する
 all:
@@ -48,6 +49,24 @@ module: $(BUILD) $(BIN) $(SYMBOLS)
 # 型チェックのみ
 typecheck:
 	@npx tsc --noEmit
+
+# dist/cheats.ar と dist/backup/cheats.ar の差分を確認する 
+diff:
+	@if [ ! -f $(DIST)/cheats.ar ]; then \
+		echo "Missing: $(DIST)/cheats.ar (run make first)"; \
+	elif [ ! -f $(DIST)/backup/cheats.ar ]; then \
+		echo "No backup: $(DIST)/backup/cheats.ar (nothing changed yet)"; \
+	elif diff -u $(DIST)/backup/cheats.ar $(DIST)/cheats.ar; then \
+		echo "No differences: $(DIST)/cheats.ar"; \
+	else \
+		status=$$?; \
+		if [ $$status -eq 1 ]; then \
+			echo "Differences found: $(DIST)/backup/cheats.ar -> $(DIST)/cheats.ar"; \
+		else \
+			echo "diff failed (exit $$status)"; \
+			exit $$status; \
+		fi; \
+	fi
 
 # ビルドディレクトリ作成
 $(BUILD):
